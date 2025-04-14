@@ -160,5 +160,3 @@ globs: **/*.{ts,tsx}
 - Be explicit about date formats when parsing strings (`parse`).
 - Handle timezones carefully if dealing with cross-timezone logic (consider `date-fns-tz`).
 - Use consistent date formatting across the user interface.
-
-test
