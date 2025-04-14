@@ -1,0 +1,162 @@
+Before diving into the best practices, please note that you may need to adapt the globs depending on your project's structure.
+
+---
+name: react-native-general-best-practices.mdc
+description: General best practices for React Native development in this project
+globs: **/*.{ts,tsx,js,jsx}
+---
+
+- Use functional components and hooks exclusively; avoid class components.
+- Emphasize modular design: structure code by feature (e.g., `src/features/auth`).
+- Use descriptive variable/function names (e.g., `isLoading`, `fetchBarDetailsQuery`).
+- Prefer named exports over default exports.
+- Use Prettier for automated code formatting.
+- Write declarative JSX, mapping over data arrays. Use fragments `<>...</>`.
+- Optimize `FlatList` performance (`keyExtractor`, `getItemLayout`, `removeClippedSubviews`).
+- Use `useMemo` and `useCallback` *only when necessary* after profiling.
+- Ensure high accessibility (a11y) standards (`accessibilityLabel`, `accessibilityRole`, etc.).
+- Use `react-native-toast-message` for non-blocking user feedback.
+- Implement robust Error Boundaries around major app sections/routes.
+- Handle errors explicitly from APIs/hooks and provide clear user feedback.
+
+---
+name: typescript-strict-best-practices.mdc
+description: TypeScript best practices for type safety and clarity
+globs: **/*.{ts,tsx}
+---
+
+- Use TypeScript exclusively with `strict` mode enabled in `tsconfig.json`.
+- Prefer `type` aliases over `interface` for consistency and flexibility.
+- **Strictly avoid `enum`s.** Use string literal union types or `as const` objects.
+- Type function components explicitly: `const MyComponent = (props: Props): JSX.Element => {...}`.
+- Define clear types/schemas (using Zod) for API responses, props, state, and parameters.
+- Use utility types (`Partial`, `Omit`, `Pick`, etc.) effectively.
+
+---
+name: expo-specific-best-practices.mdc
+description: Best practices for using Expo modules and Managed Workflow
+globs: **/*.{ts,tsx,js,jsx}
+---
+
+- Leverage Expo SDK modules (`expo-image`, `expo-notifications`, `expo-constants`/`expo-env`, `expo-linking`).
+- Rely on the Expo Managed Workflow for build and update processes.
+- Use `expo-constants` or `expo-env` for secure environment variable management (ensure `.env` is gitignored).
+- Implement push notifications correctly using `expo-notifications` (permissions, token handling, listeners).
+- Keep app aligned with compatible Expo SDK versions.
+- Use `expo-image` for optimized image loading and caching.
+
+---
+name: expo-router-navigation-best-practices.mdc
+description: Best practices for navigation using Expo Router
+globs: app/**/*.{ts,tsx}
+---
+
+- Implement all navigation using Expo Router's file-based system within the `app/` directory.
+- Use Layout Routes (`_layout.tsx`) for shared UI (headers, tabs) and applying logic (auth checks).
+- Utilize Route Groups (`(group)`) for organization (e.g., `(auth)`, `(app)`, `(owner)`) and applying specific layouts/rules.
+- Use dynamic routes (`[param].tsx`) for detail screens, accessing params via `useLocalSearchParams`.
+- Navigate programmatically with `useRouter` (`push`, `replace`, `back`). Pass typed params.
+- Manage filter/search state via URL Search Parameters where persistence/sharing is needed.
+- Consider Expo Router's Typed Routes for enhanced type safety.
+
+---
+name: supabase-backend-best-practices.mdc
+description: Best practices for interacting with the Supabase backend
+globs: **/*.{ts,tsx,sql}
+---
+
+- **CRITICAL:** Implement strict Row Level Security (RLS) policies for ALL tables. Default deny. Define clear `SELECT`, `INSERT`, `UPDATE`, `DELETE` policies based on user roles (`auth.uid()`, `auth.role()`, custom functions).
+- Use Supabase Edge Functions (Deno/TS + Zod) for privileged operations, complex validation, or secure 3rd-party API calls. Verify JWTs within Edge Functions.
+- Use Supabase Database Functions (RPC), often `SECURITY DEFINER`, for atomic operations needing transaction control (e.g., reservation creation). Ensure internal permission checks.
+- Leverage Supabase Realtime subscriptions (`channel.on('postgres_changes', ...)`). Use callbacks primarily to trigger React Query invalidations (`queryClient.invalidateQueries`). Filter subscriptions precisely.
+- Structure Supabase Storage paths logically (e.g., `owner_id/bar_id/uuid.jpg`) and enforce access via Storage policies. Generate secure URLs if needed.
+- Use the `@supabase/supabase-js` client for all interactions (Auth, DB, Storage, Functions, RPC).
+- Load Supabase URL/anon key securely via environment variables.
+- Write clear, maintainable SQL for schema, RLS, triggers, and functions.
+
+---
+name: zustand-state-management-best-practices.mdc
+description: Best practices for global client state management with Zustand
+globs: src/stores/**/*.{ts,tsx}
+---
+
+- Use Zustand for *global client-side state only* (e.g., auth status, user profile, maybe global UI toggles).
+- Keep stores focused on specific slices of state (e.g., `authStore`, `uiStore`).
+- Define stores using `create` with explicit TypeScript types for state and actions.
+- Use middleware like `immer` for easier immutable updates if state structure is complex.
+- Access state and actions via the generated hook (e.g., `useAuthStore`).
+- Use selectors for derived state or specific state slices to optimize re-renders.
+
+---
+name: react-query-server-state-best-practices.mdc
+description: Best practices for managing server state with React Query
+globs: src/hooks/**/*.{ts,tsx}
+---
+
+- Use React Query for managing *all server state* (fetching, caching, mutations related to Supabase).
+- Create custom hooks (e.g., `useFetchBars`, `useCreateReservationMutation`) abstracting `useQuery` and `useMutation` logic.
+- Define clear `queryKey`s, often including parameters, for granular caching.
+- Configure `staleTime` and `cacheTime` appropriately based on data volatility.
+- **Mandatory:** Use `queryClient.invalidateQueries` in mutation `onSuccess` callbacks and in response to relevant Realtime events to keep data fresh.
+- Handle loading (`isLoading`, `isFetching`) and error (`isError`, `error`) states explicitly in the UI.
+- Consider optimistic updates for mutations that need immediate UI feedback, ensuring proper rollback on error.
+
+---
+name: nativewind-styling-best-practices.mdc
+description: Best practices for styling with NativeWind
+globs: **/*.{ts,tsx}
+---
+
+- Configure `tailwind.config.js` to define theme (colors, fonts) and any custom utilities.
+- Apply styles using utility classes directly within JSX components.
+- Use NativeWind's responsive modifiers (e.g., `sm:`, `md:`) for adapting layouts to different screen sizes.
+- Keep custom CSS minimal; prefer composing utilities or configuring Tailwind.
+- Ensure components are accessible when using custom styling.
+
+---
+name: react-hook-form-zod-best-practices.mdc
+description: Best practices for forms using React Hook Form and Zod
+globs: **/*.{ts,tsx}
+---
+
+- Use `react-hook-form` for managing form state, registration, and submission.
+- **Integrate Zod schemas** for validation using the `resolver` option (`zodResolver`).
+- Define Zod schemas that match form fields and expected data structures.
+- Display validation errors clearly to the user, sourced from `formState.errors`.
+- Use controlled inputs (`Controller` component) only when necessary (e.g., for third-party UI libraries).
+- Handle form submission logic within the `handleSubmit` callback.
+
+---
+name: zod-validation-best-practices.mdc
+description: Best practices for runtime validation with Zod
+globs: **/*.{ts,tsx}
+---
+
+- Use Zod schemas to validate: form inputs, API/Edge Function/RPC inputs & outputs, environment variables, route parameters.
+- Leverage Zod's excellent TypeScript inference (`z.infer<typeof schema>`).
+- Use `.parse()` or `.safeParse()` depending on whether you want errors thrown or returned.
+- Implement discriminated unions in Zod schemas for defining success/error states returned from backend functions.
+- Use `.refine()` for complex cross-field validation rules.
+
+---
+name: safe-area-handling-best-practices.mdc
+description: Best practices for safe area management
+globs: **/*.{ts,tsx}
+---
+
+- **Mandatory:** Wrap the entire app root (`app/_layout.tsx`) with `SafeAreaProvider` from `react-native-safe-area-context`.
+- Use the `useSafeAreaInsets()` hook to get inset values dynamically for custom layout adjustments.
+- Use the `SafeAreaView` component to automatically apply padding for screens or specific views needing full-edge protection.
+- Avoid hardcoding padding values meant to mimic safe areas.
+
+---
+name: date-fns-dates-best-practices.mdc
+description: Best practices for handling dates and times with date-fns
+globs: **/*.{ts,tsx}
+---
+
+- Use `date-fns` for all date parsing, formatting, comparison, and manipulation.
+- Import specific functions (`import { format, parseISO } from 'date-fns'`) for better tree-shaking.
+- Be explicit about date formats when parsing strings (`parse`).
+- Handle timezones carefully if dealing with cross-timezone logic (consider `date-fns-tz`).
+- Use consistent date formatting across the user interface.

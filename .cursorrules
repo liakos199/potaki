@@ -1,0 +1,111 @@
+# Cursor Rules for Bar Reservation App (React Native, Expo, Supabase)
+
+You are an expert AI assistant specialized in the following stack and practices for building the Bar Reservation mobile app:
+- **Core:** TypeScript, React Native, Expo (Managed Workflow)
+- **Navigation:** Expo Router (File-based routing, Layouts, Groups, Typed Routes)
+- **State Management:** Zustand (Global Client State), React Query (Server State, Caching, Mutations)
+- **Backend:** Supabase (Auth, PostgreSQL, RLS, Realtime, Edge Functions [Deno/TS], Storage, RPC Functions)
+- **Styling:** NativeWind (Tailwind CSS for React Native)
+- **UI Components:** Core React Native components styled with NativeWind. Use `expo-image`, `react-native-maps`, `react-native-toast-message`.
+- **Forms & Validation:** React Hook Form + Zod
+- **Utilities:** `react-native-safe-area-context`, `expo-constants`/`expo-env`, `date-fns`
+- **Practices:** Functional components, modular structure (feature-based preferred), strict TypeScript, comprehensive RLS, secure Edge Functions/RPCs, Realtime subscriptions, unit/integration testing (Jest/Vitest + RNTL).
+
+Code Style and Structure
+- Write concise, technically accurate TypeScript code adhering to `strict` mode.
+- Strongly prefer functional components and hooks; **avoid class components**.
+- Emphasize modular design: Structure code by feature (e.g., `src/features/auth`, `src/features/bars`) containing components, hooks, screens, stores, types, api calls, etc. Use `index.ts` files for easier imports from modules.
+- Use descriptive variable/function names (e.g., `isLoading`, `hasSufficientPermissions`, `fetchBarDetailsQuery`, `useCreateReservationMutation`).
+- Strictly follow Expo Router's file-based routing conventions (`app` directory, `_layout.tsx`, `(group)` folders, `[param].tsx` files). Use Typed Routes if feasible.
+- Prefer named exports over default exports for clarity and refactoring ease.
+- Use Prettier for automated code formatting according to project configuration (`.prettierrc`).
+
+Naming Conventions
+- Use `kebab-case` for directories and non-component files (e.g., `src/hooks/queries`, `auth-store.ts`).
+- Use `PascalCase` for component files and type/interface names (e.g., `BarDetailScreen.tsx`, `type UserProfile`).
+- Use `camelCase` for variables, functions, and hooks (e.g., `barId`, `handleSignOut`, `useAuthStore`). Constants can be `UPPER_SNAKE_CASE`.
+
+TypeScript Usage
+- Use TypeScript exclusively. Enable and enforce `strict` mode in `tsconfig.json`.
+- Prefer `type` aliases over `interface` for consistency and flexibility with utility types.
+- **Strictly avoid `enum`s.** Use string literal union types (`type Status = 'pending' | 'confirmed'`) or `as const` objects (`const ROLES = { CUSTOMER: 'customer', ... } as const;`).
+- Type function components using `const MyComponent = (props: Props): JSX.Element => {...}`. Avoid `React.FC`.
+- Define clear types/schemas (using Zod where validation is needed) for API responses (Supabase RPC/Edge Functions), function parameters, Zustand store state, component props, and route params.
+
+Syntax and Formatting
+- Use `function` keyword for standalone utility functions. Use arrow functions `() => {}` for components, callbacks, and inline functions.
+- Use concise conditionals (ternaries, `&&`). Avoid unnecessary `else` blocks by using early returns/guards.
+- Write declarative JSX, mapping over data arrays. Use fragments `<>...</>` where appropriate.
+
+UI and Styling
+- Use **NativeWind** for all styling via utility classes in JSX. Configure `tailwind.config.js`.
+- Utilize **`expo-image`** for optimized image loading.
+- Use **`react-native-maps`** for map displays.
+- Implement layouts using Flexbox via NativeWind classes (`flex`, `flex-row`, `justify-center`, etc.).
+- Ensure high accessibility (a11y) using `accessibilityLabel`, `accessibilityRole`, etc.
+- Use **`react-native-toast-message`** for non-blocking user feedback.
+
+Safe Area Management
+- **Mandatory:** Use `SafeAreaProvider` at the root (`app/_layout.tsx`).
+- Use `useSafeAreaInsets` hook or `SafeAreaView` component from `react-native-safe-area-context` to avoid UI obstructions. Do not hardcode padding for safe areas.
+
+Performance Optimization
+- Leverage **React Query** caching effectively. Configure stale times and use `queryClient.invalidateQueries` strategically with mutations and Realtime events.
+- Use `useMemo` and `useCallback` *only when necessary* to optimize complex calculations or prevent unnecessary re-renders in memoized children. Profile first.
+- Optimize `FlatList` performance (`keyExtractor`, `getItemLayout`, `removeClippedSubviews`).
+- Monitor bundle size and consider dynamic imports if needed later.
+
+Navigation (Expo Router)
+- Implement navigation solely via **Expo Router's file system conventions**.
+- Use **Layout Routes (`_layout.tsx`)** for shared UI (headers, tabs) and logic (auth checks).
+- Utilize **Route Groups (`(group)`)** for organization and applying specific layouts/auth rules.
+- Use **dynamic routes (`[param].tsx`)** and **catch-all routes (`[...slug].tsx`)** as needed.
+- Access route parameters via `useLocalSearchParams` (ensure type safety, potentially using Zod).
+- Navigate programmatically with `useRouter` (`push`, `replace`, `back`). Pass typed params.
+- Manage filter/search state via **URL Search Parameters** where persistence/sharing is desired.
+
+State Management
+- Use **Zustand** for global client state (auth status, user profile, maybe global UI toggles). Keep stores focused.
+- Use **React Query** for all server state management (fetching, caching, mutations related to Supabase data). Define custom hooks abstracting query/mutation logic.
+- Use **React Hook Form** for complex forms, integrating Zod schemas for validation.
+- Use local component state (`useState`) for simple, transient UI state confined to a single component.
+
+Error Handling and Validation
+- Use **Zod** extensively for runtime validation: forms, API/Edge Function/RPC inputs & outputs, environment variables.
+- Implement **Error Boundaries** around major app sections/routes.
+- Handle errors explicitly from Supabase calls, React Query (`error`, `isError`), and form submissions. Display user-friendly errors (`react-native-toast-message` or inline).
+- Design Edge Functions/RPCs to return discriminated unions or structured errors validated by Zod (e.g., `{ success: true, data: T } | { success: false, error: { code: string, message: string } }`).
+- Use guard clauses/early returns.
+
+Testing
+- Write **unit tests** (Jest/Vitest + RNTL) for: utilities, Zustand stores, Zod schemas, critical hook logic (mocking dependencies).
+- Write **integration tests** (RNTL) for: screens (rendering based on state/props), form submissions, component interactions within features (mocking API calls).
+- Use Supabase's local development tools (`supabase start/stop`) for testing involving mocked Supabase environment if needed.
+
+Security
+- **CRITICAL:** Define strict **Supabase RLS policies** for ALL tables. Default deny.
+- Use **Supabase Edge Functions** for privileged operations, complex logic, 3rd-party API calls. Verify JWT (`request.headers.get('Authorization')`) and use Zod validation.
+- Use **Supabase Database Functions (RPC)** (`SECURITY DEFINER` carefully) for atomic DB operations needing transaction control (e.g., `create_reservation`). Ensure internal permission checks.
+- Load secrets securely via **`expo-env`** or `expo-constants` from `.env` files (`.gitignore`!). **NEVER commit secrets.**
+- Sanitize any user-generated content displayed in HTML contexts if applicable (less common in RN).
+
+Supabase Specifics
+- Use the `@supabase/supabase-js` client.
+- Leverage **Realtime subscriptions** filtered appropriately. Use subscription callbacks primarily to trigger React Query invalidations.
+- Structure **Storage** paths logically (`owner_id/bar_id/uuid.jpg`) and enforce access via Storage policies and potentially secure URL generation via backend/Edge Functions.
+- Write maintainable SQL for schema, RLS, triggers, RPCs. Comment complex logic.
+
+Key Libraries & Expo Modules
+- **Mandatory:** Expo SDK, `expo-router`, `zustand`, `@tanstack/react-query`, `@supabase/supabase-js`, `nativewind`, `tailwindcss`, `react-hook-form`, `zod`, `react-native-safe-area-context`, `react-native-maps`, `expo-image`, `date-fns`, `react-native-toast-message`.
+- **Likely:** `expo-constants` / `expo-env`, `expo-notifications`.
+- **Dev:** `typescript`, `@types/react`, `@types/react-native`, `prettier`, testing libraries.
+
+Documentation References
+- Expo: https://docs.expo.dev/
+- Expo Router: https://expo.github.io/router/
+- Supabase: https://supabase.com/docs
+- Zustand: https://github.com/pmndrs/zustand
+- React Query: https://tanstack.com/query/latest/docs/react/overview
+- NativeWind: https://www.nativewind.dev/
+- Zod: https://zod.dev/
+- React Hook Form: https://react-hook-form.com/

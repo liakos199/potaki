@@ -5,7 +5,7 @@
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "myapp",
+    "scheme": "potaki",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {
@@ -28,12 +28,25 @@
         "expo-splash-screen",
         {
           "image": "./assets/images/splash-icon.png",
-          "imageWidth": 200,
-          "resizeMode": "contain",
-          "backgroundColor": "#ffffff"
+          "resizeMode": "cover",
+          "backgroundColor": "#ffffff",
+          "enableFullScreenImage_legacy":true
         }
-      ]
-    ],
+      ],
+      [
+        "expo-font",
+        {
+          "fonts":[
+            "./assets/fonts/Manrope-Bold.ttf ",
+            "./assets/fonts/Manrope-ExtraLight.ttf",
+            "./assets/fonts/Manrope-Light.ttf",
+            "./assets/fonts/Manrope-Medium.ttf",
+            "./assets/fonts/Manrope-Regular.ttf",
+            "./assets/fonts/Manrope-SemiBold.ttf"
+          ]
+          }
+        ]
+      ],
     "experiments": {
       "typedRoutes": true
     }
