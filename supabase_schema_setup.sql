@@ -54,6 +54,7 @@ create table if not exists public.staff_assignments (
 alter table public.profiles enable row level security;
 create policy "Users can view own profile" on public.profiles for select using (auth.uid() = id);
 create policy "Users can update own profile (not role)" on public.profiles for update using (auth.uid() = id) with check (auth.uid() = id);
+create policy "Enable read access for all users" on public.profiles for select to public using (true);
 -- Deny direct updates to role by anyone except admin (handled outside RLS)
 
 -- Bars RLS
@@ -66,8 +67,8 @@ create policy "Only owner can delete their bar" on public.bars for delete using 
 -- Staff Assignments RLS
 alter table public.staff_assignments enable row level security;
 create policy "Staff can view their assignments" on public.staff_assignments for select using (staff_user_id = auth.uid());
-create policy "Owners can view assignments for their bars" on public.staff_assignments for select using (assigned_by_owner_id = auth.uid());
-create policy "Owners can delete assignments they made" on public.staff_assignments for delete using (assigned_by_owner_id = auth.uid());
+create policy "Owners can view assignments for their bars" on public.staff_assignments for select using (exists (select 1 from bars where bars.id = staff_assignments.bar_id and bars.owner_id = auth.uid()));
+create policy "Owners can delete assignments for their bars" on public.staff_assignments for delete using (exists (select 1 from bars where bars.id = staff_assignments.bar_id and bars.owner_id = auth.uid()));
 -- Deny direct inserts: only the function can insert
 create policy "No direct inserts" on public.staff_assignments for insert with check (false);
 
@@ -116,6 +117,28 @@ $$;
 grant execute on function public.promote_to_staff(uuid, uuid) to authenticated;
 
 
+-- Demote staff to customer (function)
+create or replace function public.demote_staff(target_user_id uuid, bar_id uuid)
+returns void
+language plpgsql
+security definer
+as $$
+begin
+  -- 1. Delete the staff assignment for this bar
+  delete from public.staff_assignments
+  where staff_user_id = demote_staff.target_user_id
+    and staff_assignments.bar_id = demote_staff.bar_id;
 
--- NOTE: Replace the UUIDs above with actual user IDs from your Supabase Auth users table for real use.
--- You can now run this script in the Supabase SQL editor or CLI to set up your database.
+  -- 2. If the user has no other staff assignments, set their role to 'customer'
+  if not exists (
+    select 1 from public.staff_assignments
+    where staff_user_id = demote_staff.target_user_id
+  ) then
+    update public.profiles
+    set role = 'customer'
+    where id = demote_staff.target_user_id;
+  end if;
+end;
+$$;
+
+grant execute on function public.demote_staff(uuid, uuid) to authenticated;

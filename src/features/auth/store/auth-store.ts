@@ -17,6 +17,7 @@ export type AuthState = {
   user: User | null;
   profile: UserProfile | null;
   isLoading: boolean;
+  hydrated: boolean;
   setUser: (user: User | null) => void;
   setProfile: (profile: UserProfile | null) => void;
   setIsLoading: (loading: boolean) => void;
@@ -28,6 +29,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   user: null,
   profile: null,
   isLoading: false, // Set to false by default
+  hydrated: false, // Track if auth state is initialized
   setUser: (user) => set({ user }),
   setProfile: (profile) => set({ profile }),
   setIsLoading: (isLoading) => set({ isLoading }),
@@ -38,11 +40,9 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   restoreSession: async () => {
     set({ isLoading: true });
     try {
-      // console.log('[restoreSession] start');
       const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
       if (sessionError) {
-        // console.log('[restoreSession] session error', sessionError);
-        set({ user: null, profile: null, isLoading: false });
+        set({ user: null, profile: null, isLoading: false, hydrated: true });
         return;
       }
       if (sessionData.session) {
@@ -54,22 +54,14 @@ export const useAuthStore = create<AuthState>((set, get) => ({
             .select('*')
             .eq('id', user.id)
             .single();
-          if (profileError) {
-            // console.log('[restoreSession] profile error', profileError);
-          }
           profile = profileData ?? null;
-        } catch (e) {
-          // console.log('[restoreSession] profile fetch exception', e);
-        }
-        set({ user, profile, isLoading: false });
-        // console.log('[restoreSession] set user and profile', user, profile);
+        } catch (e) {}
+        set({ user, profile, isLoading: false, hydrated: true });
       } else {
-        set({ user: null, profile: null, isLoading: false });
-        // console.log('[restoreSession] no session, cleared user and profile');
+        set({ user: null, profile: null, isLoading: false, hydrated: true });
       }
     } catch (e) {
-      set({ user: null, profile: null, isLoading: false });
-      // console.log('[restoreSession] unexpected error', e);
+      set({ user: null, profile: null, isLoading: false, hydrated: true });
     }
   },
 }));
