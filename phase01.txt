@@ -1,0 +1,104 @@
+Project Title: Role-Based Bar Management Mobile App
+1. Project Goal:
+To develop a mobile application using React Native and Expo, backed by a Supabase database, that allows users to sign up and sign in. Based on their assigned role (customer, staff, or owner), users will be directed to different sections of the app upon login and have varying levels of access and functionality. Customers will primarily view information, while owners and staff will manage "Bars". The implementation must prioritize security, preventing users from inappropriately modifying roles or sensitive data.
+2. Technology Stack:
+Frontend: React Native (managed by Expo)
+Backend & Database: Supabase (PostgreSQL database, Authentication, Database Functions (RPC), Row Level Security)
+Authentication: Supabase Auth (Email/Password)
+3. Core Features:
+3.1. Authentication:
+Sign Up: Users can create a new account using their email address and a password.
+Sign In: Registered users can log in using their email and password.
+Session Management: Supabase handles user sessions.
+Password Management: Leverage Supabase Auth for secure password handling.
+3.2. User Roles and Profiles:
+Every user has an associated role.
+Possible roles: 'customer', 'staff', 'owner'.
+Default Role: When a new user signs up, their role is automatically set to 'customer'.
+Role Storage: The role is stored in a dedicated profiles table in Supabase, linked to the auth.users table via the user's UUID.
+Owner Promotion (Manual): An administrator must manually update a user's role from 'customer' to 'owner' directly in the Supabase database. Regular users cannot change roles directly via the app's standard table access.
+Staff Promotion (In-App via Secure Function): Users with the 'owner' role use an interface within the app to promote a 'customer' user to the 'staff' role for one of the owner's specific bars. This action is performed by calling a secure Supabase database function (promote_to_staff), not by directly updating the profiles table from the client.
+3.3. Role-Based Navigation and Access Control:
+Initial Login Redirect:
+If role is 'customer', navigate to Homepage.
+If role is 'staff' or 'owner', navigate to AdminPanel.
+Navigation Permissions:
+'owner' and 'staff' users can navigate between the AdminPanel (and related admin screens) and the Homepage.
+'customer' users are restricted to the Homepage and other non-admin screens. They cannot access the AdminPanel or any administrative functions/screens. Enforce via app navigation logic and RLS on data fetching for admin sections.
+3.4. Bar Management (Owner):
+Users with the 'owner' role (typically operating within the AdminPanel) can:
+Create a Bar: Create a bar record (name, owner_id automatically set).
+View Owned Bars: List bars where owner_id matches their user ID (with full details/controls).
+Update/Delete Owned Bars: Modify or remove bars they own.
+3.5. Staff Management (Owner via Secure Function):
+Users with the 'owner' role (typically operating within the AdminPanel) can:
+View a list of users (potentially filtered for 'customer' role).
+Select a 'customer' user and one of their owned bars.
+Initiate the promotion process, triggering a call to the promote_to_staff Supabase database function (target_user_id, assigned_bar_id).
+3.6. Bar Management (Staff):
+Users with the 'staff' role (typically operating within the AdminPanel) can:
+Access the AdminPanel.
+View the specific Bar(s) they are assigned to (via staff_assignments).
+Perform partial management tasks on those assigned bars (specific tasks TBD).
+3.7. Customer Experience:
+Users with the 'customer' role can:
+Sign up and Sign in.
+Access the Homepage upon login.
+View a list of available Bars and their public information (e.g., name). This data should be fetched and displayed on the Homepage or a related screen accessible to customers.
+Interact with other customer-specific features presented on the Homepage.
+Explicitly prohibited from accessing the AdminPanel or any screens/functionality intended for owner or staff roles (including bar creation/editing/staff management).
+4. Data Models (Supabase Tables):
+profiles (linked to auth.users)
+id (UUID, PK, FK to auth.users.id)
+email (Text)
+role (Text: 'customer', 'staff', 'owner', default: 'customer')
+created_at (TimestampTZ, default: now())
+updated_at (TimestampTZ, default: now())
+(Other fields like name as needed)
+bars
+id (UUID, PK, default: gen_random_uuid())
+name (Text, not null)
+owner_id (UUID, FK to profiles.id, not null)
+created_at (TimestampTZ, default: now())
+updated_at (TimestampTZ, default: now())
+(Potentially other public info fields)
+staff_assignments (Junction Table)
+id (UUID, PK, default: gen_random_uuid())
+staff_user_id (UUID, FK to profiles.id, not null)
+bar_id (UUID, FK to bars.id, not null)
+assigned_by_owner_id (UUID, FK to profiles.id, not null)
+created_at (TimestampTZ, default: now())
+(Add UNIQUE constraint on (staff_user_id, bar_id))
+5. Security Implementation Details:
+5.1. Row Level Security (RLS) on profiles:
+SELECT: Users can select their own profile. Owners/staff might need broader select permissions (e.g., to see customer emails for promotion), carefully scoped.
+INSERT: Handled by Supabase Auth trigger.
+UPDATE: Users can update only their own non-sensitive fields. RLS explicitly DENIES any user from directly updating the role column.
+DELETE: Likely restricted.
+5.2. Row Level Security (RLS) on bars:
+SELECT: Allow SELECT for all authenticated users (USING (auth.role() = 'authenticated')). This enables customers, staff, and owners to view the list of bars.
+INSERT: Only users with role='owner' can insert (WITH CHECK ( (SELECT role FROM profiles WHERE id = auth.uid()) = 'owner' )).
+UPDATE/DELETE: Only the owner of the bar (USING (owner_id = auth.uid()) WITH CHECK (owner_id = auth.uid())).
+5.3. Row Level Security (RLS) on staff_assignments:
+SELECT: Staff can select their own assignments (USING (staff_user_id = auth.uid())). Owners can select assignments for their bars (USING (assigned_by_owner_id = auth.uid())).
+INSERT: Should be denied via RLS (USING (false)). Inserts are handled exclusively by the promote_to_staff function.
+DELETE: Owners can delete assignments for their bars (USING (assigned_by_owner_id = auth.uid())). Staff cannot delete assignments.
+5.4. Supabase Database Function (promote_to_staff):
+Signature: promote_to_staff(target_user_id UUID, assigned_bar_id UUID)
+Permissions: SECURITY DEFINER. Grant EXECUTE permission to authenticated users.
+Logic:
+Verify caller (auth.uid()) has 'owner' role.
+Verify target_user_id has 'customer' role.
+Verify assigned_bar_id exists and belongs to the caller.
+Verify no existing assignment for this user/bar.
+If checks pass: Atomically UPDATE profiles SET role = 'staff' and INSERT INTO staff_assignments.
+Return success or raise error.
+6. Key User Flows:
+New Customer: Sign Up -> role='customer' -> Sign In -> Redirect to Homepage -> Can view list of Bars. (Access to AdminPanel denied).
+Owner Assignment: Admin manually changes role to 'owner' -> Owner Signs In -> Redirect to AdminPanel. (Can navigate to Homepage, can view all Bars).
+Owner Creates Bar: Owner logs in (AdminPanel) -> Create Bar UI -> Submit -> INSERT into bars.
+Owner Promotes Staff: Owner logs in (AdminPanel) -> Staff Mgmt UI -> Selects 'customer' & bar -> Confirm -> App calls supabase.rpc('promote_to_staff', {...}) -> Function validates & performs updates.
+Staff Access: Staff User (role='staff') Signs In -> Redirect to AdminPanel -> Views assigned Bar(s). (Can navigate to Homepage, can view all Bars).
+7. Placeholders:
+Refine features/content for the Homepage, ensuring it includes the display of available Bars.
+This final version incorporates all requirements discussed, including customer bar visibility and the secure RPC-based promotion mechanism, with corresponding RLS adjustments.
