@@ -22,7 +22,7 @@ const SignInScreen = (): JSX.Element => {
     setErrorMsg(null);
     try {
       await signIn(data);
-      console.log('[SignInScreen] Sign in successful, navigating to /');
+
       router.replace('/'); // Always go to root, let index.tsx handle role-based redirect
     } catch (err: any) {
       setErrorMsg(err.message || 'Failed to sign in');

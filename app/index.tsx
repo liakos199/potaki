@@ -13,8 +13,7 @@ const Index = (): JSX.Element => {
   const isLoading = useAuthStore((s) => s.isLoading);
 
   useEffect(() => {
-    // Debug: Log when effect runs and with what values
-    console.log('[Index useEffect]', { navKey: navigationState?.key, isLoading, user, profile });
+
     if (
       navigationState?.key &&
       !isLoading &&

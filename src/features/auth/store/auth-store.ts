@@ -38,10 +38,10 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   restoreSession: async () => {
     set({ isLoading: true });
     try {
-      console.log('[restoreSession] start');
+      // console.log('[restoreSession] start');
       const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
       if (sessionError) {
-        console.log('[restoreSession] session error', sessionError);
+        // console.log('[restoreSession] session error', sessionError);
         set({ user: null, profile: null, isLoading: false });
         return;
       }
@@ -55,21 +55,21 @@ export const useAuthStore = create<AuthState>((set, get) => ({
             .eq('id', user.id)
             .single();
           if (profileError) {
-            console.log('[restoreSession] profile error', profileError);
+            // console.log('[restoreSession] profile error', profileError);
           }
           profile = profileData ?? null;
         } catch (e) {
-          console.log('[restoreSession] profile fetch exception', e);
+          // console.log('[restoreSession] profile fetch exception', e);
         }
         set({ user, profile, isLoading: false });
-        console.log('[restoreSession] set user and profile', user, profile);
+        // console.log('[restoreSession] set user and profile', user, profile);
       } else {
         set({ user: null, profile: null, isLoading: false });
-        console.log('[restoreSession] no session, cleared user and profile');
+        // console.log('[restoreSession] no session, cleared user and profile');
       }
     } catch (e) {
       set({ user: null, profile: null, isLoading: false });
-      console.log('[restoreSession] unexpected error', e);
+      // console.log('[restoreSession] unexpected error', e);
     }
   },
 }));

@@ -39,7 +39,8 @@ const AdminPanelScreen = (): JSX.Element => {
   return (
     <View className="flex-1 items-center justify-center bg-white">
       <Text className="text-2xl font-bold mb-8">Admin Panel</Text>
-      <Text className="text-base text-gray-500 mb-8">(Owner/Staff only)</Text>
+      <Text className="text-base text-gray-500 mb-2">(Owner/Staff only)</Text>
+      <Text className="text-base font-semibold mb-8">Your role: <Text className={profile.role === 'owner' ? 'text-blue-600' : 'text-green-600'}>{profile.role.charAt(0).toUpperCase() + profile.role.slice(1)}</Text></Text>
       <Pressable
         className="w-40 py-3 rounded-lg bg-red-600 items-center"
         accessibilityRole="button"
