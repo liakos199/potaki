@@ -1,0 +1,45 @@
+# Existing Features in the Bar Management App
+
+## Authentication & User Roles
+- User sign up and sign in via Supabase Auth
+- Default role set to 'customer' on registration
+- Roles managed in the `profiles` table (customer, staff, owner)
+- Manual promotion to 'owner' by admin (via Supabase dashboard)
+
+## Navigation & Access Control
+- Role-based navigation: customers go to Homepage, staff/owners go to AdminPanel
+- Customers restricted from accessing admin screens (UI & RLS)
+- Owners and staff can access AdminPanel
+
+## Bar Management (Owner)
+- Owners can create bars (name, owner_id auto-set)
+- Owners can view a list of their owned bars
+- Owners can update and delete their own bars
+
+## Staff Management (Owner)
+- Owners can search for users with the 'customer' role
+- Owners can promote a customer to staff for a specific bar (via secure RPC)
+- Owners can view all staff assigned to each of their bars
+- Owners can remove/demote staff from their bars (via secure RPC)
+- Staff assignments are many-to-many (one user can be staff for multiple bars)
+- When a staff member is removed from all bars, their role is set back to 'customer'
+
+## Staff Experience
+- Staff can view a list of bars they are assigned to in the AdminPanel
+
+## Customer Experience
+- Customers can view a list of all available bars and public bar info on the Homepage
+- Customers cannot access admin/staff/owner screens or actions
+
+## Security & Data Integrity
+- Row Level Security (RLS) enforced on all tables (profiles, bars, staff_assignments)
+- Only secure RPC functions can change roles or staff assignments
+- Owners can only manage bars and staff assignments for their own bars
+- No direct client-side updates to sensitive fields (like role)
+
+## Error Handling & Feedback
+- User-friendly feedback for success/failure on staff promotion/demotion and bar actions
+
+---
+
+*This file reflects the current implemented features as of 2025-04-16. Update as new features are added.*

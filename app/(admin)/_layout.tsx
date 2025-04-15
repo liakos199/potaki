@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { Stack, useRouter } from 'expo-router';
 import { useAuthStore } from '@/src/features/auth/store/auth-store';
 import { View, ActivityIndicator, Text } from 'react-native';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 const AdminLayout = ({ children }: { children: React.ReactNode }) => {
   const profile = useAuthStore((s) => s.profile);
@@ -35,5 +36,6 @@ export default function AdminStackLayout() {
     <AdminLayout>
       <Stack />
     </AdminLayout>
+
   );
 }

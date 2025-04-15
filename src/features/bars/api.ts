@@ -32,6 +32,22 @@ export async function updateBar(input: UpdateBarInput): Promise<Bar> {
   return data;
 }
 
+// Delete bar and demote all staff to 'customer' (calls removeStaff for each staff member)
+import { fetchBarStaff, removeStaff } from '@/src/features/staff/api';
+
+export async function deleteBarAndDemoteStaff(barId: string): Promise<void> {
+  // 1. Fetch all staff for this bar
+  const staff = await fetchBarStaff(barId);
+  // 2. Demote each staff member (in parallel)
+  await Promise.all(staff.map((member) => removeStaff(member.id, barId)));
+  // 3. Delete the bar
+  const { error } = await supabase
+    .from('bars')
+    .delete()
+    .eq('id', barId);
+  if (error) throw error;
+}
+
 export async function deleteBar(barId: string): Promise<void> {
   const { error } = await supabase
     .from('bars')
