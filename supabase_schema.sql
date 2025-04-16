@@ -31,13 +31,20 @@ create table if not exists public.profiles (
 );
 
 -- 3. Bars Table
-create table if not exists public.bars (
-  id uuid primary key default uuid_generate_v4(),
+create table public.bars (
+  id uuid not null default extensions.uuid_generate_v4 (),
   name text not null,
-  owner_id uuid not null references public.profiles(id) on delete cascade,
-  created_at timestamptz not null default now(),
-  updated_at timestamptz not null default now()
-);
+  owner_id uuid not null,
+  created_at timestamp with time zone not null default now(),
+  updated_at timestamp with time zone not null default now(),
+  address character varying(255) not null,
+  phone character varying(20) not null,
+  website character varying(255) null,
+  description text null,
+  location geography not null,
+  constraint bars_pkey primary key (id),
+  constraint bars_owner_id_fkey foreign KEY (owner_id) references profiles (id) on delete CASCADE
+) TABLESPACE pg_default;
 
 -- 4. Staff Assignments Table (junction)
 create table if not exists public.staff_assignments (

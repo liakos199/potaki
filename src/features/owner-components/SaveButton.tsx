@@ -17,7 +17,7 @@ export const SaveButton: FC<Props> = ({ onPress, loading, disabled }) => (
         accessibilityLabel="Save changes"
         activeOpacity={0.85}
         disabled={disabled || loading}
-        style={{ width: '90%', marginHorizontal: '5%', borderRadius: 10}}
+        style={{ width: '100%', marginHorizontal: '5%', borderRadius: 10}}
       >
         {loading ? (
           <ActivityIndicator color="#fff" />

@@ -1,12 +1,11 @@
 import { useEffect, useRef } from 'react';
 import { useRouter } from 'expo-router';
-import { View, Text, FlatList, TouchableOpacity, TextInput, ActivityIndicator } from 'react-native';
+import { View, Text, FlatList, TouchableOpacity } from 'react-native';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { fetchOwnerBars, deleteBar, createBar } from './api';
-import type { Bar, CreateBarInput } from './types';
+import type { CreateBarInput } from './types';
 import { useAuthStore } from '@/src/features/auth/store/auth-store';
-import { BarForm } from './bar-form';
-
+import { Plus, Store, ChevronRight, Loader } from 'lucide-react-native';
 import { useState } from 'react';
 
 export const OwnerBarList = (): JSX.Element => {
@@ -33,7 +32,6 @@ export const OwnerBarList = (): JSX.Element => {
 
   const updateBarMutation = useMutation({
     mutationFn: async ({ barId, name }: { barId: string; name: string }) => {
-      // Only update name for now
       return await (await import('./api')).updateBar({ id: barId, name });
     },
     onSuccess: () => {
@@ -59,55 +57,78 @@ export const OwnerBarList = (): JSX.Element => {
   }, [createBarMutation.isSuccess]);
 
   if (!profile) return <></>;
-  if (isLoading) return <Text>Loading bars...</Text>;
-  if (error) return <Text>Error loading bars.</Text>;
+  
+  if (isLoading) {
+    return (
+      <View className="flex-1 justify-center items-center">
+        <Loader size={24} color="#4B5563" className="animate-spin" />
+        <Text className="text-gray-500 mt-2">Loading bars...</Text>
+      </View>
+    );
+  }
+  
+  if (error) {
+    return (
+      <View className="flex-1 justify-center items-center px-4">
+        <Text className="text-red-500 text-center">Error loading bars.</Text>
+      </View>
+    );
+  }
 
-  // If no bars, show only the Create Bar button and a gentle prompt
+  // Empty state
   if (!bars || bars.length === 0) {
     return (
-      <View className="w-full max-w-xs mx-auto flex-1 justify-center items-center mt-16">
-        <Text className="text-lg font-semibold text-gray-700 mb-6 text-center">You don't have any bars yet.</Text>
+      <View className="flex-1 justify-center items-center px-6">
+        <Store size={48} color="#9CA3AF" />
+        <Text className="text-gray-500 text-center mt-3 mb-6">You don't have any bars yet.</Text>
         <TouchableOpacity
-          className="bg-blue-700 py-3 px-4 rounded-xl items-center shadow-sm w-full"
+          className="bg-blue-600 flex-row items-center px-5 py-3 rounded-lg"
           onPress={() => router.push('/(admin)/create-bar')}
           accessibilityRole="button"
           accessibilityLabel="Go to create bar page"
-          activeOpacity={0.85}
+          activeOpacity={0.7}
         >
-          <Text className="text-white font-semibold text-base tracking-wide">+ Create Bar</Text>
+          <Plus size={18} color="#FFFFFF" />
+          <Text className="text-white font-medium ml-2">Create Bar</Text>
         </TouchableOpacity>
       </View>
     );
   }
 
-  // If bars exist, show the list (name only), each selectable, plus the Create Bar button at the top
+  // List state
   return (
-    <View className="w-full max-w-xl mx-auto">
-      <Text className="text-2xl font-extrabold text-blue-900 mb-1 text-center tracking-tight">Your Bars</Text>
-      <View className="h-0.5 bg-blue-100 mb-6 w-full" />
-      <TouchableOpacity
-        className="bg-blue-700 py-3 px-4 rounded-xl items-center mb-7 shadow-sm self-center w-full max-w-xs"
-        onPress={() => router.push('/(admin)/create-bar')}
-        accessibilityRole="button"
-        accessibilityLabel="Go to create bar page"
-        activeOpacity={0.85}
-      >
-        <Text className="text-white font-semibold text-base tracking-wide">+ Create Bar</Text>
-      </TouchableOpacity>
+    <View className="flex-1 px-4 pt-6 pb-8">
+      <View className="flex-row justify-between items-center mb-6">
+        <Text className="text-xl font-bold text-gray-800">Your Bars</Text>
+        <TouchableOpacity
+          className="bg-blue-600 flex-row items-center px-3 py-2 rounded-lg"
+          onPress={() => router.push('/(admin)/create-bar')}
+          accessibilityRole="button"
+          accessibilityLabel="Go to create bar page"
+          activeOpacity={0.7}
+        >
+          <Plus size={16} color="#FFFFFF" />
+          <Text className="text-white font-medium ml-1">New Bar</Text>
+        </TouchableOpacity>
+      </View>
+      
       <FlatList
         data={bars}
         keyExtractor={(item) => item.id}
-        contentContainerStyle={{ gap: 16, paddingBottom: 16 }}
+        contentContainerStyle={{ gap: 10 }}
         renderItem={({ item }) => (
           <TouchableOpacity
-            className="w-full rounded-2xl shadow-sm border border-gray-200 bg-white px-5 py-4 flex-row items-center"
-            onPress={() => router.push(`/edit-bar/${item.id}`)}
+            className="flex-row items-center px-4 py-4 bg-white rounded-lg border border-gray-100"
+            onPress={() => router.push(`/bar/${item.id}`)}
             accessibilityRole="button"
             accessibilityLabel={`Edit ${item.name}`}
-            activeOpacity={0.85}
+            activeOpacity={0.7}
           >
-            <Text className="text-lg font-semibold text-gray-900 flex-1" numberOfLines={1}>{item.name}</Text>
-            <Text className="text-blue-600 font-medium ml-2">Edit</Text>
+            <Store size={20} color="#4B5563" />
+            <Text className="text-gray-800 font-medium flex-1 ml-3" numberOfLines={1}>
+              {item.name}
+            </Text>
+            <ChevronRight size={18} color="#6B7280" />
           </TouchableOpacity>
         )}
       />
