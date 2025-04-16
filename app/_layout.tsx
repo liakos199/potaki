@@ -17,7 +17,7 @@ export default function RootLayout() {
   return (
     <QueryClientProvider client={queryClient}>
       <SafeAreaProvider>
-        <Stack />
+        <Stack screenOptions={{ headerShown: false }} />
       </SafeAreaProvider>
     </QueryClientProvider>
   );

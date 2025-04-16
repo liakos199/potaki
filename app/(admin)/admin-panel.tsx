@@ -43,18 +43,29 @@ const AdminPanelScreen = (): JSX.Element => {
       <Text className="text-2xl font-bold mb-6 text-center">Admin Panel</Text>
       <Text className="text-base text-gray-500 mb-2 self-start">(Owner/Staff only)</Text>
       <Text className="text-base font-semibold mb-4 self-start">Your role: <Text className={profile.role === 'owner' ? 'text-blue-600' : 'text-green-600'}>{profile.role.charAt(0).toUpperCase() + profile.role.slice(1)}</Text></Text>
-      {profile.role === 'owner' && <>
-        <OwnerBarList />
-        <TouchableOpacity
-          className="w-full max-w-xl py-2 rounded bg-blue-700 items-center mt-6 mb-2"
-          accessibilityRole="button"
-          accessibilityLabel="Go to Manage Staff"
-          onPress={() => router.push('/(admin)/manage-staff')}
-          activeOpacity={0.85}
-        >
-          <Text className="text-white text-base font-bold">Manage Staff</Text>
-        </TouchableOpacity>
-      </>}
+      {profile.role === 'owner' && (() => {
+        // Fetch bars here to determine if Manage Staff should be shown
+        const { data: bars, isLoading: barsLoading } = require('@tanstack/react-query').useQuery({
+          queryKey: ['owner-bars', profile.id],
+          queryFn: () => require('@/src/features/bars/api').fetchOwnerBars(profile.id),
+          enabled: !!profile.id,
+        });
+        return <>
+          <OwnerBarList />
+          {barsLoading ? null : Array.isArray(bars) && bars.length > 0 && (
+            <TouchableOpacity
+              className="w-full max-w-xl py-2 rounded bg-blue-700 items-center mt-6 mb-2"
+              accessibilityRole="button"
+              accessibilityLabel="Go to Manage Staff"
+              onPress={() => router.push('/(admin)/manage-staff')}
+              activeOpacity={0.85}
+            >
+              <Text className="text-white text-base font-bold">Manage Staff</Text>
+            </TouchableOpacity>
+          )}
+        </>;
+      })()}
+
       {profile.role === 'staff' && <StaffBarList />}
       <Pressable
         className="w-32 py-2 rounded bg-red-600 items-center mt-8"

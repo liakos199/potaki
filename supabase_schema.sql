@@ -49,7 +49,38 @@ create table if not exists public.staff_assignments (
   unique (staff_user_id, bar_id)
 );
 
--- 5. RLS Policies
+-- 5. Seat Options Table and Type
+create type seat_option_type as enum ('bar', 'table', 'vip');
+
+create table seat_options (
+  id uuid primary key default gen_random_uuid(),
+  bar_id uuid references bars(id) on delete cascade,
+  type seat_option_type not null,
+  enabled boolean not null default true,
+  available_count integer not null,
+  min_people integer not null,
+  max_people integer not null,
+  unique (bar_id, type)
+);
+
+-- 6. Drink Options Table and Type
+create type drink_option_type as enum ('single-drink', 'bottle');
+
+create table if not exists public.drink_options (
+  id uuid primary key default gen_random_uuid(),
+  bar_id uuid not null references bars(id) on delete cascade,
+  type drink_option_type not null,
+  name text, -- Only for bottles, nullable for single-drink
+  price numeric(8,2) not null check (price > 0),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  -- Only one single-drink per bar, but multiple bottles
+  unique (bar_id, type, name)
+);
+
+
+
+-- 7. RLS Policies
 -- Profiles RLS
 alter table public.profiles enable row level security;
 create policy "Users can view own profile" on public.profiles for select using (auth.uid() = id);
@@ -72,7 +103,16 @@ create policy "Owners can delete assignments for their bars" on public.staff_ass
 -- Deny direct inserts: only the function can insert
 create policy "No direct inserts" on public.staff_assignments for insert with check (false);
 
--- 6. Secure Function: promote_to_staff
+
+-- Drink Options RLS
+alter table public.drink_options enable row level security;
+-- Owners can manage drinks for their bars
+create policy "Owner can manage drinks for their bar"
+  on public.drink_options
+  using (exists (select 1 from bars where bars.id = bar_id and bars.owner_id = auth.uid()))
+  with check (exists (select 1 from bars where bars.id = bar_id and bars.owner_id = auth.uid()));
+
+-- 8. Secure Function: promote_to_staff
 create or replace function public.promote_to_staff(target_user_id uuid, assigned_bar_id uuid)
 returns void
 language plpgsql
@@ -142,3 +182,17 @@ end;
 $$;
 
 grant execute on function public.demote_staff(uuid, uuid) to authenticated;
+
+-- function/trigger to update the updated_at column for drink options table
+create or replace function update_updated_at_column()
+returns trigger as $$
+begin
+  NEW.updated_at = now();
+  return NEW;
+end;
+$$ language plpgsql;
+
+create trigger update_drink_options_updated_at
+before update on public.drink_options
+for each row
+execute procedure update_updated_at_column();

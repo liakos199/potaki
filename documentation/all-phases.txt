@@ -1,0 +1,90 @@
+Phase 2: Core Reservation Engine & Basic Management
+Goal: Implement the fundamental ability for customers to make reservations and for staff/owners to manage them, along with the necessary setup for seat options.
+Features:
+Seat Options Management (Owner):
+Define seat options with names, booking types (per party/per person), min/max people, and available count. (Drink options link can come later).
+Core Reservation System - Customer Flow (Steps 1-3, 5):
+Allow customers to browse bars (already exists) and initiate a reservation.
+Implement steps: Selecting date, choosing a seat option, entering party size, confirming reservation.
+Core Reservation System - Basic Validation:
+Check date validity (basic format/future date).
+Ensure party size fits within the selected seat option’s min/max limits.
+Core Reservation System - Storage:
+Store confirmed reservations in the database (linking user, bar, seat option, date, party size, initial status 'pending' or 'confirmed').
+Core Reservation System - View Reservations (Customer):
+Allow customers to view a list of their own reservations and their status.
+Core Reservation System - Reservation Management (Staff/Owner):
+Enable staff and owners to view reservations for their assigned bar(s).
+Implement functionality to change reservation status (e.g., confirm, cancel).
+UI Enhancements - Basic Feedback:
+Implement simple toast messages for reservation success/failure.
+
+Phase 3: Enhanced Bar Details, Advanced Reservation Logic & Customer Interaction
+Goal: Enrich bar profiles with detailed information, implement more sophisticated reservation logic, and add features like reviews and filtering.
+Features:
+Enhanced Bar Management (Owner):
+Add/edit detailed bar information: address, phone, website, description, price range, daily reservation limit, location (lat/lon), type of music.
+Set/manage operating hours per day.
+Add/manage menu items (names, descriptions, prices). (Linking to reservation comes in this phase).
+Upload/manage bar photos.
+Link drink options (menu items) to seat options.
+Core Reservation System - Customer Flow (Step 4):
+Add the "Select a drink option/menu item" step to the reservation process.
+Core Reservation System - Advanced Validation:
+Verify the bar’s daily reservation limit is not exceeded.
+Confirm seat availability based on booking type (per party/per person) and existing reservations for the date (real-time calculation).
+Customer Experience Enhancements:
+Display detailed bar information (menu, photos, hours, etc.) on the bar's profile page.
+Enable filtering/searching bars based on the new details (location, features, tags - if tags are added as part of details).
+Implement the Reviews feature (customers can add reviews, all users can view reviews for a bar).
+UI Enhancements - Reservation Progress:
+Add a progress bar for the multi-step reservation flow.
+
+
+Phase 4: Real-time, Notifications, Events & Polish
+Goal: Make the application dynamic with real-time updates and push notifications. Add event functionality and finalize remaining features and refinements.
+Features:
+Real-time & Notifications:
+Implement Real-time UI Updates (Supabase subscriptions) for reservation lists/status, potentially reviews.
+Implement Push Notifications (Expo) for reservation status changes (created, confirmed, canceled) and potentially event reminders.
+Additional Features - Events:
+Implement Events functionality: Allow owners/staff to create/manage events associated with their bar.
+Display upcoming events on the bar's profile page for customers.
+Refinements:
+Ensure all Specific Role Permissions are correctly implemented and enforced for all new features (e.g., who can manage menus, events, confirm reservations).
+Final polish on UI/UX across all new features.
+Address any complex edge cases found during testing Phase 1 & 2.
+Calculate and display real-time availability counts for seat options on specific dates dynamically in the UI before the user selects one (if not already covered sufficiently in Phase 2 validation).
+This phased approach builds the core functionality first, then enhances it with more data and better logic, and finally adds advanced features like real-time updates and notifications.
+
+
+
+
+
+
+
+. Core Reservation System:
+* Customer Reservation Flow: The entire process for customers to browse bars, select date/seat/party size/drink options, and confirm reservations is missing.
+* Reservation Validation: Real-time checks for date validity, party size constraints, daily bar limits, and seat availability (considering booking type) are not implemented.
+* Reservation Storage: Mechanism to store confirmed reservations in the database.
+* View Reservations: Functionality for customers to view their own reservations and their status (pending, confirmed, canceled).
+* Reservation Management (Staff/Owner): Ability for staff and owners to view, confirm, or cancel reservations for their assigned bar(s).
+2. Enhanced Bar Management (Owner):
+* Detailed Bar Information: Adding/editing fields beyond just the name: address, phone, website, description, price range, daily reservation limit, location (latitude/longitude), type of music.
+* Operating Hours: Setting and managing operating hours for each day of the week.
+* Menu Management: Adding and managing menu items (food and drinks) with names, descriptions, and prices.
+* Photo Management: Uploading and managing photos for the bar profile.
+* Seat Options Management: Defining, adding, and managing seat options with details like name, booking type (per party/per person), min/max people, associated drink options, and available count.
+3. Customer Experience Enhancements:
+* Detailed Bar View: Displaying comprehensive bar information to customers, including the newly added details (menu, photos, operating hours, features, tags, events).
+* Bar Filtering/Searching: Enabling customers to filter or search bars based on criteria like features, tags, location, etc.
+* Reviews: Functionality for customers to leave reviews for bars and view existing reviews.
+* Events: Functionality to display bar-specific events to customers. (Potentially also needs an owner/staff interface to manage events, which isn't explicitly listed but implied).
+4. Real-time & Notifications:
+* Real-time UI Updates: Implementing Supabase real-time subscriptions to instantly update the UI for changes in reservations, reviews, or events.
+* Push Notifications: Setting up and sending push notifications (via Expo) for reservation updates, event reminders, etc.
+5. UI Enhancements:
+* Toast Messages: Implementing specific UI feedback like toast messages (e.g., using react-native-toast-message) for actions.
+* Reservation Progress Bar: Adding a visual progress indicator (e.g., using react-native-progress) for the multi-step reservation process.
+6. Specific Role Permissions (Refinements):
+* While basic role access exists, the specific permissions outlined in the required features (Customers making reservations/reviews, Staff managing reservations) need implementation.
