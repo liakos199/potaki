@@ -42,7 +42,7 @@ export const OwnerBarList = (): JSX.Element => {
   });
 
   const createBarMutation = useMutation({
-    mutationFn: (input: CreateBarInput) => createBar(input, profile!.id),
+    mutationFn: (input: CreateBarInput) => createBar({ ...input, owner_id: profile!.id }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['owner-bars', profile?.id] });
     },

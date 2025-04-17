@@ -24,6 +24,13 @@
 - Bar edit form uses type-safe, Zod-validated defaults for all fields, including location
 - Improved mobile UX: modal moves up on keyboard open for better usability
 
+## Drink Options Management (Owner)
+- Owners can view, add, edit, and remove drink options (single-drink and bottles) for each bar
+- Duplicate bottle names are prevented, with validation and user feedback
+- Modal-based, accessible UI for managing drinks
+- Changes are locally staged until Save (dirty state detection)
+- All actions use secure, type-safe API calls with error handling and feedback
+
 ## Seat Options Management (Owner)
 - View all seat options for a bar (bar, table, vip)
 - Add new seat options (type-restricted, no duplicates)
