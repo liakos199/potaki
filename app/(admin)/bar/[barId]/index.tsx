@@ -1,13 +1,15 @@
-import { View, Text, TouchableOpacity, ActivityIndicator } from 'react-native';
+import { View, Text, TouchableOpacity, ActivityIndicator,Modal } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
 import { fetchOwnerBars } from '@/src/features/bars/api';
 import { useAuthStore } from '@/src/features/auth/store/auth-store';
+import { useState } from 'react';
 
 const BarOptionsScreen = (): JSX.Element => {
   const router = useRouter();
   const { barId } = useLocalSearchParams<{ barId: string }>();
   const profile = useAuthStore((s) => s.profile);
+  const [isModalVisible, setIsModalVisible] = useState(false)
 
   // Fetch all bars for this owner (could optimize with a fetchBarById if available)
   const { data: bars, isLoading } = useQuery({
@@ -74,6 +76,20 @@ const BarOptionsScreen = (): JSX.Element => {
           <Text className="text-gray-800 font-medium">Camera</Text>
         </TouchableOpacity>
       </View>
+      {/* Modal */}
+      <Modal visible={isModalVisible}
+   onRequestClose={() => setIsModalVisible(false)}
+   animationType='slide'
+   presentationStyle='pageSheet'
+   >
+    <View>
+        <Text>Test</Text>
+    </View>
+    </Modal>
+
+    <TouchableOpacity onPress={()=> setIsModalVisible(true)} className='p-2'>
+<Text>Test</Text>
+    </TouchableOpacity>
     </View>
   );
 };

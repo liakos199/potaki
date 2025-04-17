@@ -1,11 +1,22 @@
-import { useEffect, useState } from 'react';
-import { View, Text, FlatList, TouchableOpacity, ActivityIndicator, Alert, TextInput, StatusBar } from 'react-native';
+import React, { useState } from 'react';
+import {
+  View,
+  Text,
+  TouchableOpacity,
+  TextInput,
+  StatusBar,
+  ScrollView,
+  SafeAreaView,
+  ActivityIndicator,
+  Alert,
+  FlatList,
+  Image,
+} from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { searchCustomers, promoteToStaff, fetchBarStaff, removeStaff } from '@/src/features/staff/api';
 import { useAuthStore } from '@/src/features/auth/store/auth-store';
 import type { CustomerProfile, StaffProfile } from '@/src/features/staff/types';
-import type { Bar } from '@/src/features/bars/types';
 
 const StaffScreen = (): JSX.Element => {
   const router = useRouter();
@@ -14,6 +25,7 @@ const StaffScreen = (): JSX.Element => {
   const queryClient = useQueryClient();
   const [search, setSearch] = useState('');
   const [searchSubmitted, setSearchSubmitted] = useState(false);
+  const [activeTab, setActiveTab] = useState('current'); // 'current' or 'add'
 
   // Fetch staff for this bar
   const {
@@ -44,10 +56,10 @@ const StaffScreen = (): JSX.Element => {
     mutationFn: ({ userId, barId }: { userId: string; barId: string }) => removeStaff(userId, barId),
     onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: ['bar-staff', variables.barId] });
-      Alert.alert('Success', 'Staff member removed.');
+      Alert.alert('Staff Removed', 'The staff member has been removed successfully.');
     },
     onError: (err: any) => {
-      Alert.alert('Error', err.message || 'Could not remove staff.');
+      Alert.alert('Action Failed', err.message || 'Could not remove staff member.');
     },
   });
 
@@ -59,190 +71,327 @@ const StaffScreen = (): JSX.Element => {
       queryClient.invalidateQueries({ queryKey: ['bar-staff', variables.barId] });
       setSearch('');
       setSearchSubmitted(false);
-      Alert.alert('Success', 'User promoted to staff!');
+      Alert.alert('Staff Added', 'User has been successfully promoted to staff!');
+      setActiveTab('current');
     },
     onError: (err: any) => {
-      Alert.alert('Error', err.message || 'Could not promote user.');
+      Alert.alert('Action Failed', err.message || 'Could not promote user to staff.');
     },
   });
 
   // Authorization check
   if (!profile || profile.role !== 'owner') {
     return (
-      <View className="flex-1 items-center justify-center bg-black">
+      <SafeAreaView className="flex-1 bg-[#0f0f13]">
         <StatusBar barStyle="light-content" />
-        <Text className="text-lg text-purple-300">Unauthorized</Text>
-      </View>
+        <View
+        
+          className="flex-1 items-center justify-center p-6"
+        >
+          <Image 
+            source={{ uri: 'https://cdn.iconscout.com/icon/free/png-256/free-lock-1851503-1569339.png' }} 
+            className="w-20 h-20 mb-6"
+          />
+          <Text className="text-2xl font-bold text-white mb-3">Access Restricted</Text>
+          <Text className="text-base text-gray-300 text-center mb-8">
+            Only bar owners can access the staff management section.
+          </Text>
+          <TouchableOpacity
+            className="bg-purple-600 py-3 px-6 rounded-xl"
+            onPress={() => router.back()}
+          >
+            <Text className="text-white font-semibold text-base">Go Back</Text>
+          </TouchableOpacity>
+        </View>
+      </SafeAreaView>
     );
   }
 
   // Loading state
   if (loadingStaff) {
     return (
-      <View className="flex-1 items-center justify-center bg-black">
+      <SafeAreaView className="flex-1 bg-[#0f0f13]">
         <StatusBar barStyle="light-content" />
-        <ActivityIndicator size="large" color="#a855f7" />
-      </View>
+        <View className="flex-1 items-center justify-center">
+          <View className="bg-[#1c1c24] rounded-2xl p-6 mb-4">
+            <ActivityIndicator size="large" color="#a855f7" />
+          </View>
+          <Text className="text-gray-300 text-base">Loading staff information...</Text>
+        </View>
+      </SafeAreaView>
     );
   }
 
   // Error state
   if (staffError) {
     return (
-      <View className="flex-1 items-center justify-center bg-black">
+      <SafeAreaView className="flex-1 bg-[#0f0f13]">
         <StatusBar barStyle="light-content" />
-        <Text className="text-red-400">Error loading staff data.</Text>
-      </View>
+        <View className="flex-1 items-center justify-center p-6">
+          <Image 
+            source={{ uri: 'https://cdn.iconscout.com/icon/free/png-256/free-error-2689513-2232392.png' }} 
+            className="w-20 h-20 mb-6"
+          />
+          <Text className="text-2xl font-bold text-red-500 mb-3">Connection Error</Text>
+          <Text className="text-base text-gray-300 text-center mb-8">
+            We couldn't load your staff data. Please check your connection and try again.
+          </Text>
+          <TouchableOpacity
+            className="bg-purple-600 py-3 px-6 rounded-xl"
+            onPress={() => refetchStaff()}
+          >
+            <Text className="text-white font-semibold text-base">Retry</Text>
+          </TouchableOpacity>
+        </View>
+      </SafeAreaView>
     );
   }
 
   // Staff item renderer
   const renderStaffItem = (item: StaffProfile) => (
-    <View key={item.id} className="flex-row items-center justify-between py-4 px-3 mb-2 rounded-xl bg-zinc-900 border border-zinc-800">
-      <View>
-        <Text className="font-medium text-gray-100">{item.name ? item.name : 'no name'}</Text>
-        <Text className="text-xs text-gray-400">{item.email}</Text>
+    <View 
+      className="flex-row items-center bg-[#1c1c24] rounded-2xl p-4 mb-3 border border-[#2d2d3a]" 
+      key={item.id}
+    >
+      <View className="mr-4">
+        <View className="w-[50px] h-[50px] rounded-full bg-purple-900 items-center justify-center">
+          <Text className="text-xl font-semibold text-white">
+            {(item.name?.[0] || 'S').toUpperCase()}
+          </Text>
+        </View>
+      </View>
+      <View className="flex-1">
+        <Text className="text-base font-semibold text-white mb-1">
+          {item.name || 'Unnamed Staff'}
+        </Text>
+        <Text className="text-sm text-gray-400">{item.email}</Text>
       </View>
       <TouchableOpacity
-        className="px-3 py-2 bg-red-600 rounded-lg"
+        className="bg-red-800 py-2 px-4 rounded-lg"
         onPress={() => {
           Alert.alert(
-            'Remove Staff',
-            `Are you sure you want to remove this staff member?`,
+            'Remove Staff Member',
+            `Are you sure you want to remove ${item.name || 'this staff member'}?`,
             [
               { text: 'Cancel', style: 'cancel' },
-              { text: 'Remove', style: 'destructive', onPress: () => removeStaffMutation.mutate({ userId: item.id, barId: barId as string }) },
+              { 
+                text: 'Remove', 
+                style: 'destructive', 
+                onPress: () => removeStaffMutation.mutate({ userId: item.id, barId: barId as string }) 
+              },
             ]
           );
         }}
         accessibilityRole="button"
         accessibilityLabel="Remove Staff"
       >
-        <Text className="text-white font-medium">Remove</Text>
+        <Text className="text-white font-medium text-sm">Remove</Text>
       </TouchableOpacity>
     </View>
   );
 
   // Customer item renderer
   const renderCustomerItem = ({ item }: { item: CustomerProfile }) => (
-    <View key={item.id} className="flex-row items-center justify-between py-4 px-3 mb-2 rounded-xl bg-zinc-900 border border-zinc-800">
-      <View>
-        <Text className="font-medium text-gray-100">{item.name ? item.name : 'no name'}</Text>
-        <Text className="text-xs text-gray-400">{item.email}</Text>
+    <View 
+      className="flex-row items-center bg-[#1c1c24] rounded-2xl p-4 mb-3 border border-[#2d2d3a]" 
+      key={item.id}
+    >
+      <View className="mr-4">
+        <View className="w-[50px] h-[50px] rounded-full bg-blue-900 items-center justify-center">
+          <Text className="text-xl font-semibold text-white">
+            {(item.name?.[0] || 'C').toUpperCase()}
+          </Text>
+        </View>
+      </View>
+      <View className="flex-1">
+        <Text className="text-base font-semibold text-white mb-1">
+          {item.name || 'Unnamed Customer'}
+        </Text>
+        <Text className="text-sm text-gray-400">{item.email}</Text>
       </View>
       <TouchableOpacity
-        className="px-3 py-2 bg-purple-700 rounded-lg"
+        className="bg-purple-800 py-2 px-4 rounded-lg"
         onPress={() => {
           Alert.alert(
             'Promote to Staff',
-            `Are you sure you want to promote this user to staff?`,
+            `Are you sure you want to promote ${item.name || 'this user'} to staff?`,
             [
               { text: 'Cancel', style: 'cancel' },
-              { text: 'Promote', style: 'default', onPress: () => promoteMutation.mutate({ userId: item.id, barId: barId as string }) },
+              { 
+                text: 'Promote', 
+                style: 'default', 
+                onPress: () => promoteMutation.mutate({ userId: item.id, barId: barId as string }) 
+              },
             ]
           );
         }}
         accessibilityRole="button"
         accessibilityLabel="Promote to Staff"
       >
-        <Text className="text-white font-medium">Promote</Text>
+        <Text className="text-white font-medium text-sm">Promote</Text>
       </TouchableOpacity>
     </View>
   );
 
   return (
-    <View className="flex-1 bg-black pt-10">
+    <SafeAreaView className="flex-1 bg-[#0f0f13]">
       <StatusBar barStyle="light-content" />
-      <Text className="text-2xl font-bold text-center text-purple-200 mb-6">Manage Staff</Text>
+      
+      {/* Header */}
+      <View
 
-      {/* Staff List Section */}
-      <View className="px-5 py-5 bg-zinc-900 mx-5 rounded-xl shadow-lg border border-zinc-800 mb-6">
-        <View className="flex-row items-center mb-4">
-          <View className="h-5 w-1 bg-purple-500 rounded-full mr-2" />
-          <Text className="text-lg font-bold text-gray-100">Current Staff</Text>
-        </View>
-        {staff.length === 0 ? (
-          <View className="py-8 items-center">
-            <Text className="text-gray-500 text-sm">No staff assigned</Text>
+        className="py-6 px-5 rounded-b-[20px]"
+      >
+        <Text className="text-3xl font-bold text-white mb-1">Staff Management</Text>
+        <Text className="text-base text-gray-300 opacity-80">Manage your bar's team members</Text>
+      </View>
+      
+      {/* Tab Navigation */}
+      <View className="flex-row px-5 mt-4">
+        <TouchableOpacity
+          className={`flex-1 py-3 items-center border-b-2 ${
+            activeTab === 'current' ? 'border-purple-500' : 'border-transparent'
+          }`}
+          onPress={() => setActiveTab('current')}
+        >
+          <Text className={`text-base font-medium ${
+            activeTab === 'current' ? 'text-white font-semibold' : 'text-gray-400'
+          }`}>
+            Current Staff ({staff.length})
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          className={`flex-1 py-3 items-center border-b-2 ${
+            activeTab === 'add' ? 'border-purple-500' : 'border-transparent'
+          }`}
+          onPress={() => setActiveTab('add')}
+        >
+          <Text className={`text-base font-medium ${
+            activeTab === 'add' ? 'text-white font-semibold' : 'text-gray-400'
+          }`}>
+            Add New Staff
+          </Text>
+        </TouchableOpacity>
+      </View>
+      
+      <ScrollView 
+        className="flex-1"
+        contentContainerClassName="pb-10"
+        showsVerticalScrollIndicator={false}
+      >
+        {activeTab === 'current' ? (
+          // Current Staff Tab
+          <View className="p-5">
+            {staff.length === 0 ? (
+              <View className="items-center justify-center bg-[#1c1c24] rounded-2xl p-10 border border-[#2d2d3a]">
+                <Image 
+                  source={{ uri: 'https://cdn.iconscout.com/icon/free/png-256/free-user-1912186-1617654.png' }} 
+                  className="w-[60px] h-[60px] mb-4 opacity-70"
+                />
+                <Text className="text-xl font-semibold text-white mb-2">No Staff Members</Text>
+                <Text className="text-base text-gray-400 text-center mb-6">
+                  You haven't added any staff members to your bar yet.
+                </Text>
+                <TouchableOpacity
+                  className="bg-purple-700 py-3 px-6 rounded-xl"
+                  onPress={() => setActiveTab('add')}
+                >
+                  <Text className="text-white font-semibold text-base">Add Staff</Text>
+                </TouchableOpacity>
+              </View>
+            ) : (
+              <>
+                <Text className="text-xl font-semibold text-white mb-4">Your Team</Text>
+                {staff.map(renderStaffItem)}
+              </>
+            )}
           </View>
         ) : (
-          <View>
-            {staff.map(renderStaffItem)}
-          </View>
-        )}
-      </View>
-
-      {/* Search Section */}
-      <View className="px-5 py-5 bg-zinc-900 mx-5 rounded-xl shadow-lg border border-zinc-800 mb-6">
-        <View className="flex-row items-center mb-4">
-          <View className="h-5 w-1 bg-purple-500 rounded-full mr-2" />
-          <Text className="text-lg font-bold text-gray-100">Add New Staff</Text>
-        </View>
-        <View className="flex-row items-center gap-2">
-          <TextInput
-            className="flex-1 border border-zinc-700 rounded-lg px-4 py-3 bg-zinc-800 text-gray-100 placeholder:text-gray-500"
-            placeholder="Search by name or email"
-            placeholderTextColor="#71717a"
-            value={search}
-            onChangeText={(text: string) => {
-              setSearch(text);
-              setSearchSubmitted(false);
-            }}
-            onSubmitEditing={() => setSearchSubmitted(true)}
-            returnKeyType="search"
-            autoCapitalize="none"
-            autoCorrect={false}
-            accessibilityLabel="Search customers"
-          />
-          <TouchableOpacity
-            className="px-4 py-3 bg-purple-700 rounded-lg"
-            onPress={() => setSearchSubmitted(true)}
-            accessibilityRole="button"
-            accessibilityLabel="Search"
-          >
-            <Text className="text-white font-medium">Search</Text>
-          </TouchableOpacity>
-        </View>
-      </View>
-
-      {/* Results Section */}
-      <View className="px-5 py-2">
-        {(!searchSubmitted || !search) ? (
-          <View className="py-8 bg-zinc-900 rounded-xl border border-zinc-800 items-center justify-center">
-            <Text className="text-gray-500 text-center">Enter a search term to find customers</Text>
-          </View>
-        ) : loadingCustomers ? (
-          <View className="py-12 items-center bg-zinc-900 rounded-xl border border-zinc-800">
-            <ActivityIndicator size="large" color="#a855f7" />
-            <Text className="text-gray-400 mt-3">Searching...</Text>
-          </View>
-        ) : customersError ? (
-          <View className="py-8 bg-zinc-900 rounded-xl border border-zinc-800 items-center">
-            <Text className="text-red-400 text-center">Error loading customers</Text>
-          </View>
-        ) : (
-          <>
-            {customers.length > 0 && (
-              <View className="flex-row items-center mb-4">
-                <View className="h-5 w-1 bg-purple-500 rounded-full mr-2" />
-                <Text className="text-lg font-bold text-gray-100">Search Results</Text>
+          // Add New Staff Tab
+          <View className="p-5">
+            <Text className="text-xl font-semibold text-white mb-2">Find Customers to Promote</Text>
+            <Text className="text-sm text-gray-400 mb-5">
+              Search for customers by name or email to promote them to staff members
+            </Text>
+            
+            {/* Search Box */}
+            <View className="flex-row mb-6">
+              <TextInput
+                className="flex-1 bg-[#1c1c24] border border-[#2d2d3a] rounded-xl px-4 py-3.5 text-base text-white mr-3"
+                placeholder="Search by name or email"
+                placeholderTextColor="#9ca3af"
+                value={search}
+                onChangeText={(text: string) => {
+                  setSearch(text);
+                  setSearchSubmitted(false);
+                }}
+                onSubmitEditing={() => setSearchSubmitted(true)}
+                returnKeyType="search"
+                autoCapitalize="none"
+                autoCorrect={false}
+                accessibilityLabel="Search customers"
+              />
+              <TouchableOpacity
+                className={`bg-purple-700 px-5 rounded-xl items-center justify-center ${
+                  !search.trim() ? 'opacity-60 bg-gray-600' : ''
+                }`}
+                onPress={() => setSearchSubmitted(true)}
+                disabled={!search.trim()}
+                accessibilityRole="button"
+                accessibilityLabel="Search"
+              >
+                <Text className="text-white font-semibold text-base">Search</Text>
+              </TouchableOpacity>
+            </View>
+            
+            {/* Search Results */}
+            {!searchSubmitted || !search.trim() ? (
+              <View className="items-center justify-center bg-[#1c1c24] rounded-2xl p-10 border border-[#2d2d3a]">
+                <Image 
+                  source={{ uri: 'https://cdn.iconscout.com/icon/free/png-256/free-search-1768073-1502246.png' }} 
+                  className="w-[60px] h-[60px] mb-4 opacity-70"
+                />
+                <Text className="text-base text-gray-400 text-center">
+                  Enter a name or email to search for customers
+                </Text>
+              </View>
+            ) : loadingCustomers ? (
+              <View className="items-center justify-center bg-[#1c1c24] rounded-2xl p-10 border border-[#2d2d3a]">
+                <ActivityIndicator size="large" color="#a855f7" />
+                <Text className="text-base text-gray-400 mt-4">Searching for customers...</Text>
+              </View>
+            ) : customersError ? (
+              <View className="items-center justify-center bg-[#1c1c24] rounded-2xl p-10 border border-[#2d2d3a]">
+                <Text className="text-xl font-semibold text-red-500 mb-2">Search Failed</Text>
+                <Text className="text-base text-gray-400 text-center mb-6">
+                  We couldn't complete your search. Please try again.
+                </Text>
+                <TouchableOpacity
+                  className="bg-purple-700 py-3 px-6 rounded-xl"
+                  onPress={() => refetchCustomers()}
+                >
+                  <Text className="text-white font-semibold text-base">Retry Search</Text>
+                </TouchableOpacity>
+              </View>
+            ) : customers.length === 0 ? (
+              <View className="items-center justify-center bg-[#1c1c24] rounded-2xl p-10 border border-[#2d2d3a]">
+                <Text className="text-xl font-semibold text-white mb-2">No Results Found</Text>
+                <Text className="text-base text-gray-400 text-center">
+                  No customers found matching "{search}"
+                </Text>
+              </View>
+            ) : (
+              <View className="mt-2">
+                <Text className="text-base font-medium text-gray-300 mb-4">
+                  Found {customers.length} customer{customers.length !== 1 ? 's' : ''}
+                </Text>
+                {customers.map((item) => renderCustomerItem({ item }))}
               </View>
             )}
-            <FlatList
-              data={customers as CustomerProfile[]}
-              keyExtractor={(item) => item.id}
-              renderItem={renderCustomerItem}
-              ListEmptyComponent={
-                <View className="py-8 bg-zinc-900 rounded-xl border border-zinc-800 items-center">
-                  <Text className="text-gray-500 text-center">No customers found</Text>
-                </View>
-              }
-              scrollEnabled={false}
-            />
-          </>
+          </View>
         )}
-      </View>
-    </View>
+      </ScrollView>
+    </SafeAreaView>
   );
 };
 

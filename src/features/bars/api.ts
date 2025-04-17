@@ -11,21 +11,36 @@ export async function fetchOwnerBars(ownerId: string): Promise<Bar[]> {
   return data ?? [];
 }
 
-export async function createBar(input: CreateBarInput, ownerId: string): Promise<Bar> {
+export async function createBar(input: CreateBarInput): Promise<Bar> {
+  // owner_id is now part of the input type, no need to add it separately
   const { data, error } = await supabase
     .from('bars')
-    .insert([{ ...input, owner_id: ownerId }])
-    .select()
-    .single();
-  if (error) throw error;
-  return data;
+    .insert([input]) // Directly insert the input object
+    .select()        // Select all columns of the newly created row
+    .single();       // Expect exactly one row back
+
+  if (error) {
+    console.error("Supabase createBar error:", error);
+    // Throw a more informative error if possible
+    throw new Error(error.message || 'Failed to create bar in database.');
+  }
+
+  if (!data) {
+    // This case shouldn't happen if insert was successful and no error, but good practice
+    throw new Error('Bar created successfully, but no data returned.');
+  }
+
+  // Ensure the returned data conforms to the Bar type (basic check)
+  // You might add more robust runtime validation if needed
+  return data as Bar;
 }
 
 export async function updateBar(input: UpdateBarInput): Promise<Bar> {
+  const { id, ...updates } = input;
   const { data, error } = await supabase
     .from('bars')
-    .update({ name: input.name })
-    .eq('id', input.id)
+    .update(updates)
+    .eq('id', id)
     .select()
     .single();
   if (error) throw error;

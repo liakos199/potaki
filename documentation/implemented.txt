@@ -16,6 +16,13 @@
 - Owners can create bars (name, owner_id auto-set)
 - Owners can view a list of their owned bars
 - Owners can update and delete their own bars
+- Owners can edit all bar fields (name, address, phone, website, description, latitude, longitude) in a modal, one at a time
+- Modal UI is accessible, responsive, and uses NativeWind for styling
+- Owners can edit bar location with latitude/longitude fields (location is parsed/stored as WKT string)
+- Real-time Zod validation for latitude/longitude fields, with field-level error messages
+- Robust utility functions for converting between WKT string and { latitude, longitude } object
+- Bar edit form uses type-safe, Zod-validated defaults for all fields, including location
+- Improved mobile UX: modal moves up on keyboard open for better usability
 
 ## Seat Options Management (Owner)
 - View all seat options for a bar (bar, table, vip)
@@ -55,4 +62,4 @@
 
 ---
 
-*This file reflects the current implemented features as of 2025-04-16. Update as new features are added.*
+*This file reflects the current implemented features as of 2025-04-16. Last updated with improved bar location handling, robust WKT utilities, and type-safe edit form defaults.*

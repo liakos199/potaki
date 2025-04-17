@@ -17,3 +17,5 @@ Enable staff and owners to view reservations for their assigned bar(s).
 Implement functionality to change reservation status (e.g., confirm, cancel).
 UI Enhancements - Basic Feedback:
 Implement simple toast messages for reservation success/failure.
+
+Note: Bar location editing and validation are now implemented.

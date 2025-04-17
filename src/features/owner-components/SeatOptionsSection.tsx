@@ -1,27 +1,23 @@
 import { useQueryClient, useMutation, useQuery } from '@tanstack/react-query';
-import { View, Text, TextInput, TouchableOpacity, ActivityIndicator, Alert } from 'react-native';
-import { useState, useEffect } from 'react';
+import { View, Text, TextInput, TouchableOpacity, ActivityIndicator, Alert, ScrollView } from 'react-native';
+import { useState, useEffect, useRef } from 'react';
 import { fetchSeatOptions, updateSeatOption, createSeatOption, deleteSeatOption } from '@/src/features/seat-options/api';
 import type { SeatOption, SeatOptionType } from '@/src/features/seat-options/types';
-import { forwardRef, useImperativeHandle } from 'react';
+
 import { Plus, X, Trash2, ToggleLeft, ToggleRight, ChevronDown, Undo2, AlertCircle, Check } from 'lucide-react-native';
+
 
 const SEAT_TYPES = ['bar', 'table', 'vip'] as const;
 
 type Props = {
   barId: string;
-};
-
-export type SeatOptionsSectionHandle = {
-  getCurrentOptions: () => SeatOption[];
-  initialOptions: SeatOption[];
-};
-
-export const SeatOptionsSection = forwardRef<SeatOptionsSectionHandle, Props & {
   onDirtyStateChange: (dirty: boolean) => void;
   isSaving: boolean;
-  onRequestSave: () => void;
-}>(({ barId, onDirtyStateChange, isSaving }, ref) => {
+  onSaveComplete?: () => void;
+};
+
+export const SeatOptionsSection = (props: Props) => {
+  const { barId, onDirtyStateChange, isSaving, onSaveComplete } = props;
   const queryClient = useQueryClient();
   const { data, isLoading, error } = useQuery({
     queryKey: ['seat-options', barId],
@@ -43,16 +39,34 @@ export const SeatOptionsSection = forwardRef<SeatOptionsSectionHandle, Props & {
     }
   }, [data]);
 
-  useImperativeHandle(ref, () => ({
-    getCurrentOptions: () => options,
-    initialOptions,
-  }));
+
 
   // Track dirty state
   useEffect(() => {
     const isDirty = JSON.stringify(options) !== JSON.stringify(initialOptions);
     onDirtyStateChange(isDirty);
   }, [options, initialOptions]);
+
+  // Trigger save when isSaving becomes true
+  const prevSaving = useRef(false);
+  useEffect(() => {
+    if (isSaving && !prevSaving.current) {
+      // Only trigger on rising edge
+      if (!validate()) {
+        onSaveComplete?.();
+        prevSaving.current = isSaving;
+        return;
+      }
+      setSaving(true);
+      mutation.mutate(undefined, {
+        onSettled: () => {
+          setSaving(false);
+          onSaveComplete?.();
+        },
+      });
+    }
+    prevSaving.current = isSaving;
+  }, [isSaving]);
 
   // Revert local changes to initial options
   const handleRevert = () => {
@@ -105,65 +119,95 @@ export const SeatOptionsSection = forwardRef<SeatOptionsSectionHandle, Props & {
 
   // Loading state
   if (isLoading) return (
-    <View className="mt-8 flex items-center justify-center py-8">
-      <ActivityIndicator size="large" color="#4F46E5" />
-      <Text className="text-gray-600 mt-2 font-medium">Loading seat options...</Text>
+    <View className="mt-6 items-center justify-center py-12 bg-[#0f0f13] rounded-2xl">
+      <View className="bg-[#1c1c24] rounded-2xl p-6 mb-4">
+        <ActivityIndicator size="large" color="#a855f7" />
+      </View>
+      <Text className="text-gray-300 text-base">Loading seat options...</Text>
     </View>
   );
 
   // Error state
   if (error) return (
-    <View className="mt-8 bg-red-50 px-4 py-5 rounded-xl border border-red-200 flex-row items-center">
-      <AlertCircle size={20} color="#EF4444" />
-      <Text className="text-red-600 ml-2 font-medium">Failed to load seat options</Text>
+    <View className="mt-6 bg-[#1c1c24] p-6 rounded-2xl border border-red-800">
+      <View className="flex-row items-center mb-2">
+        <AlertCircle size={24} color="#EF4444" />
+        <Text className="text-xl font-bold text-red-500 ml-2">Connection Error</Text>
+      </View>
+      <Text className="text-gray-300 mb-4">
+        We couldn't load your seat options. Please check your connection and try again.
+      </Text>
+      <TouchableOpacity
+        className="bg-purple-700 py-3 rounded-xl items-center"
+        onPress={() => queryClient.invalidateQueries({ queryKey: ['seat-options', barId] })}
+      >
+        <Text className="text-white font-semibold text-base">Retry</Text>
+      </TouchableOpacity>
     </View>
   );
 
   // Empty state
   if (!options.length) return (
-    <View className="mt-8 bg-blue-50 rounded-xl p-6 items-center border border-blue-100">
-      <Text className="text-gray-700 mb-4 text-center font-medium">No seat options found for this bar</Text>
-      <TouchableOpacity
-        className="bg-indigo-600 px-6 py-3 rounded-lg mb-2 shadow-sm flex-row items-center"
-        onPress={() => setDrawerOpen(true)}
-        accessibilityRole="button"
-        accessibilityLabel="Add seat option"
-        activeOpacity={0.85}
-        disabled={saving}
-      >
-        <Plus size={20} color="#ffffff" />
-        <Text className="text-white font-semibold text-base ml-2">Add Seat Option</Text>
-      </TouchableOpacity>
+    <View className="mt-6 bg-[#1c1c24] rounded-2xl p-6 border border-[#2d2d3a]">
+      <View className="items-center py-6">
+        <View className="w-16 h-16 rounded-full bg-purple-900/20 items-center justify-center mb-4">
+          <Text className="text-3xl">🪑</Text>
+        </View>
+        <Text className="text-xl font-semibold text-white mb-2">No Seat Options</Text>
+        <Text className="text-gray-400 text-center mb-6">
+          You haven't added any seat options for this bar yet.
+        </Text>
+        <TouchableOpacity
+          className="bg-purple-700 px-6 py-3.5 rounded-xl mb-2 shadow-sm flex-row items-center"
+          onPress={() => setDrawerOpen(true)}
+          accessibilityRole="button"
+          accessibilityLabel="Add seat option"
+          activeOpacity={0.85}
+          disabled={saving}
+        >
+          <Plus size={20} color="#ffffff" />
+          <Text className="text-white font-semibold text-base ml-2">Add Seat Option</Text>
+        </TouchableOpacity>
+      </View>
+      
       {formError && (
-        <View className="mt-4 bg-red-50 p-3 rounded-lg border border-red-200 w-full flex-row items-center">
-          <AlertCircle size={16} color="#EF4444" />
-          <Text className="text-red-600 ml-2">{formError}</Text>
+        <View className="mt-4 bg-red-900/30 p-4 rounded-xl border border-red-800 flex-row items-center">
+          <AlertCircle size={20} color="#EF4444" />
+          <Text className="text-red-400 ml-2 flex-1">{formError}</Text>
         </View>
       )}
       
       {/* Drawer for adding seat option */}
       {drawerOpen && (
-        <View className="absolute left-0 right-0 bottom-0 bg-white border-t border-gray-200 p-6 z-50 shadow-2xl rounded-t-3xl">
+        <View className="absolute left-0 right-0 bottom-0 bg-[#1c1c24] border-t border-[#2d2d3a] p-6 z-50 shadow-2xl rounded-t-3xl">
+          <View
+
+            className="absolute top-0 left-0 right-0 h-2 rounded-t-3xl"
+          />
           <View className="flex-row justify-between items-center mb-6">
-            <Text className="text-lg font-semibold text-gray-900">Add Seat Option</Text>
+            <Text className="text-xl font-bold text-white">Add Seat Option</Text>
             <TouchableOpacity
+              className="p-2 rounded-full bg-[#2d2d3a]"
               onPress={() => setDrawerOpen(false)}
               accessibilityRole="button"
               accessibilityLabel="Close drawer"
             >
-              <X size={24} color="#6B7280" />
+              <X size={20} color="#9CA3AF" />
             </TouchableOpacity>
           </View>
           
           {SEAT_TYPES.filter(t => !options.find(o => o.type === t)).length === 0 ? (
-            <View className="items-center py-6">
-              <Text className="text-gray-600">All seat types are already added</Text>
+            <View className="items-center py-8">
+              <View className="w-16 h-16 rounded-full bg-green-900/20 items-center justify-center mb-4">
+                <Check size={32} color="#4ADE80" />
+              </View>
+              <Text className="text-gray-300 text-center">All seat types are already added</Text>
             </View>
           ) : (
             SEAT_TYPES.filter(t => !options.find(o => o.type === t)).map((type) => (
               <TouchableOpacity
                 key={type}
-                className="w-full py-4 mb-3 rounded-xl bg-indigo-600 items-center shadow-sm flex-row justify-center"
+                className="w-full py-4 mb-3 rounded-xl bg-purple-700 items-center shadow-sm flex-row justify-center"
                 onPress={() => {
                   setOptions(prev => [
                     ...prev,
@@ -193,13 +237,13 @@ export const SeatOptionsSection = forwardRef<SeatOptionsSectionHandle, Props & {
           )}
           
           <TouchableOpacity
-            className="w-full py-3 mt-3 rounded-xl border border-gray-300 items-center"
+            className="w-full py-3.5 mt-3 rounded-xl border border-[#2d2d3a] items-center"
             onPress={() => setDrawerOpen(false)}
             accessibilityRole="button"
             accessibilityLabel="Cancel"
             activeOpacity={0.85}
           >
-            <Text className="text-gray-700 font-medium text-base">Cancel</Text>
+            <Text className="text-gray-300 font-medium text-base">Cancel</Text>
           </TouchableOpacity>
         </View>
       )}
@@ -211,26 +255,34 @@ export const SeatOptionsSection = forwardRef<SeatOptionsSectionHandle, Props & {
   const hasMissingSeatTypes = SEAT_TYPES.filter(t => !options.find(o => o.type === t)).length > 0;
 
   return (
-    <View className="mt-8 overflow-hidden">
+    <View className="mt-6 overflow-hidden">
       {/* Header */}
-      <View className="px-5 py-4 bg-indigo-50 rounded-t-xl border-t border-x border-indigo-200 flex-row justify-between items-center">
-        <Text className="text-lg font-bold text-indigo-900">Seat Options</Text>
-        {hasMissingSeatTypes && (
-          <TouchableOpacity
-            className="bg-indigo-600 px-3 py-2 rounded-lg shadow-sm flex-row items-center"
-            onPress={() => setDrawerOpen(true)}
-            accessibilityRole="button"
-            accessibilityLabel="Add seat option"
-            activeOpacity={0.85}
-          >
-            <Plus size={16} color="#ffffff" />
-            <Text className="text-white font-medium text-sm ml-1">Add</Text>
-          </TouchableOpacity>
-        )}
+      <View
+
+        className="py-4 px-5 rounded-t-2xl"
+      >
+        <View className="flex-row justify-between items-center">
+          <Text className="text-xl font-bold text-white">Seat Options</Text>
+          {hasMissingSeatTypes && (
+            <TouchableOpacity
+              className="bg-purple-800 px-3.5 py-2 rounded-lg shadow-sm flex-row items-center"
+              onPress={() => setDrawerOpen(true)}
+              accessibilityRole="button"
+              accessibilityLabel="Add seat option"
+              activeOpacity={0.85}
+            >
+              <Plus size={16} color="#ffffff" />
+              <Text className="text-white font-medium text-sm ml-1.5">Add Option</Text>
+            </TouchableOpacity>
+          )}
+        </View>
+        <Text className="text-gray-300 opacity-80 mt-1">
+          Configure seating options for your bar
+        </Text>
       </View>
 
       {/* Content */}
-      <View className="bg-white border-x border-gray-200 px-4 py-2">
+      <View className="bg-[#0f0f13] px-4 py-4">
         {SEAT_TYPES.map((type) => {
           const opt = options.find((o) => o.type === type);
           if (!opt) return null;
@@ -246,16 +298,27 @@ export const SeatOptionsSection = forwardRef<SeatOptionsSectionHandle, Props & {
           };
           
           return (
-            <View key={type} className="mb-4 p-4 border border-gray-200 rounded-xl bg-gray-50 shadow-sm">
+            <View 
+              key={type} 
+              className={`mb-4 p-4 border rounded-xl shadow-sm ${
+                opt.enabled 
+                  ? 'bg-[#1c1c24] border-[#2d2d3a]' 
+                  : 'bg-[#1c1c24]/50 border-[#2d2d3a]/50'
+              }`}
+            >
               {/* Header row */}
-              <View className="flex-row items-center justify-between mb-4 pb-2 border-b border-gray-200">
+              <View className="flex-row items-center justify-between mb-4 pb-3 border-b border-[#2d2d3a]">
                 <View className="flex-row items-center">
-                  <Text className="mr-2 text-2xl">{getSeatIcon()}</Text>
-                  <Text className="text-lg font-semibold capitalize text-gray-800">{type}</Text>
+                  <View className="w-10 h-10 rounded-full bg-purple-900/20 items-center justify-center mr-3">
+                    <Text className="text-xl">{getSeatIcon()}</Text>
+                  </View>
+                  <Text className="text-lg font-semibold capitalize text-white">{type}</Text>
                 </View>
                 <View className="flex-row">
                   <TouchableOpacity
-                    className={`px-3 py-1 rounded-full flex-row items-center ${opt.enabled ? 'bg-green-500' : 'bg-gray-400'}`}
+                    className={`px-3 py-1.5 rounded-full flex-row items-center ${
+                      opt.enabled ? 'bg-green-600' : 'bg-gray-600'
+                    }`}
                     onPress={() => {
                       Alert.alert(
                         `${opt.enabled ? 'Disable' : 'Enable'} ${type} seating`,
@@ -275,12 +338,12 @@ export const SeatOptionsSection = forwardRef<SeatOptionsSectionHandle, Props & {
                     ) : (
                       <ToggleLeft size={16} color="#ffffff" />
                     )}
-                    <Text className="text-white font-medium ml-1 text-sm">
+                    <Text className="text-white font-medium ml-1.5 text-sm">
                       {opt.enabled ? 'Enabled' : 'Disabled'}
                     </Text>
                   </TouchableOpacity>
                   <TouchableOpacity
-                    className="ml-2 p-1 rounded-full bg-red-100"
+                    className="ml-2 p-2 rounded-full bg-red-900/30"
                     onPress={() => {
                       Alert.alert(
                         'Delete Seat Option',
@@ -303,9 +366,13 @@ export const SeatOptionsSection = forwardRef<SeatOptionsSectionHandle, Props & {
               {/* Form fields */}
               <View className="flex-row gap-3">
                 <View className="flex-1">
-                  <Text className="text-xs text-gray-600 mb-1 font-medium">Available Seats</Text>
+                  <Text className="text-xs text-gray-400 mb-1.5 font-medium">Available Seats</Text>
                   <TextInput
-                    className={`border rounded-lg px-3 py-2 text-base ${opt.enabled ? 'bg-white border-gray-300' : 'bg-gray-100 border-gray-200 text-gray-500'}`}
+                    className={`border rounded-lg px-3 py-2.5 text-base ${
+                      opt.enabled 
+                        ? 'bg-[#2d2d3a] border-[#3d3d4a] text-white' 
+                        : 'bg-[#2d2d3a]/50 border-[#3d3d4a]/50 text-gray-500'
+                    }`}
                     value={String(opt.available_count)}
                     onChangeText={v => handleChange(type, 'available_count', Number(v.replace(/[^0-9]/g, '')))}
                     keyboardType="numeric"
@@ -315,9 +382,13 @@ export const SeatOptionsSection = forwardRef<SeatOptionsSectionHandle, Props & {
                   />
                 </View>
                 <View className="flex-1">
-                  <Text className="text-xs text-gray-600 mb-1 font-medium">Min People</Text>
+                  <Text className="text-xs text-gray-400 mb-1.5 font-medium">Min People</Text>
                   <TextInput
-                    className={`border rounded-lg px-3 py-2 text-base ${opt.enabled ? 'bg-white border-gray-300' : 'bg-gray-100 border-gray-200 text-gray-500'}`}
+                    className={`border rounded-lg px-3 py-2.5 text-base ${
+                      opt.enabled 
+                        ? 'bg-[#2d2d3a] border-[#3d3d4a] text-white' 
+                        : 'bg-[#2d2d3a]/50 border-[#3d3d4a]/50 text-gray-500'
+                    }`}
                     value={String(opt.min_people)}
                     onChangeText={v => handleChange(type, 'min_people', Number(v.replace(/[^0-9]/g, '')))}
                     keyboardType="numeric"
@@ -327,9 +398,13 @@ export const SeatOptionsSection = forwardRef<SeatOptionsSectionHandle, Props & {
                   />
                 </View>
                 <View className="flex-1">
-                  <Text className="text-xs text-gray-600 mb-1 font-medium">Max People</Text>
+                  <Text className="text-xs text-gray-400 mb-1.5 font-medium">Max People</Text>
                   <TextInput
-                    className={`border rounded-lg px-3 py-2 text-base ${opt.enabled ? 'bg-white border-gray-300' : 'bg-gray-100 border-gray-200 text-gray-500'}`}
+                    className={`border rounded-lg px-3 py-2.5 text-base ${
+                      opt.enabled 
+                        ? 'bg-[#2d2d3a] border-[#3d3d4a] text-white' 
+                        : 'bg-[#2d2d3a]/50 border-[#3d3d4a]/50 text-gray-500'
+                    }`}
                     value={String(opt.max_people)}
                     onChangeText={v => handleChange(type, 'max_people', Number(v.replace(/[^0-9]/g, '')))}
                     keyboardType="numeric"
@@ -345,53 +420,60 @@ export const SeatOptionsSection = forwardRef<SeatOptionsSectionHandle, Props & {
       </View>
 
       {/* Footer */}
-      <View className="bg-gray-50 px-4 py-3 border-b border-x border-gray-200 rounded-b-xl">
+      <View className="bg-[#1c1c24] px-4 py-4 rounded-b-2xl border-t border-[#2d2d3a]">
         {formError && (
-          <View className="mb-3 bg-red-50 p-3 rounded-lg border border-red-200 flex-row items-center">
-            <AlertCircle size={16} color="#EF4444" />
-            <Text className="text-red-600 ml-2 flex-1">{formError}</Text>
+          <View className="mb-4 bg-red-900/30 p-4 rounded-xl border border-red-800 flex-row items-center">
+            <AlertCircle size={20} color="#EF4444" />
+            <Text className="text-red-400 ml-2 flex-1">{formError}</Text>
           </View>
         )}
 
         {/* Revert Button (only if dirty) */}
         {isDirty && (
           <TouchableOpacity
-            className="flex-row items-center justify-center py-3 mb-3 rounded-lg bg-gray-200 shadow-sm"
+            className="flex-row items-center justify-center py-3.5 rounded-xl bg-[#2d2d3a] shadow-sm"
             onPress={handleRevert}
             accessibilityRole="button"
             accessibilityLabel="Revert seat option changes"
             activeOpacity={0.85}
           >
-            <Undo2 size={16} color="#4B5563" />
-            <Text className="text-gray-700 font-medium text-base ml-2">Revert Changes</Text>
+            <Undo2 size={18} color="#d1d5db" />
+            <Text className="text-gray-300 font-medium text-base ml-2">Revert Changes</Text>
           </TouchableOpacity>
         )}
       </View>
 
       {/* Drawer for adding seat option */}
       {drawerOpen && (
-        <View className="absolute left-0 right-0 bottom-0 bg-white border-t border-gray-200 p-6 z-50 shadow-2xl rounded-t-3xl">
+        <View className="absolute left-0 right-0 bottom-0 bg-[#1c1c24] border-t border-[#2d2d3a] p-6 z-50 shadow-2xl rounded-t-3xl">
+          <View
+
+            className="absolute top-0 left-0 right-0 h-2 rounded-t-3xl"
+          />
           <View className="flex-row justify-between items-center mb-6">
-            <Text className="text-lg font-semibold text-gray-900">Add Seat Option</Text>
+            <Text className="text-xl font-bold text-white">Add Seat Option</Text>
             <TouchableOpacity
+              className="p-2 rounded-full bg-[#2d2d3a]"
               onPress={() => setDrawerOpen(false)}
               accessibilityRole="button"
               accessibilityLabel="Close drawer"
             >
-              <X size={24} color="#6B7280" />
+              <X size={20} color="#9CA3AF" />
             </TouchableOpacity>
           </View>
           
           {SEAT_TYPES.filter(t => !options.find(o => o.type === t)).length === 0 ? (
-            <View className="items-center py-6">
-              <Check size={32} color="#4ADE80" />
-              <Text className="text-gray-600 mt-2">All seat types are already added</Text>
+            <View className="items-center py-8">
+              <View className="w-16 h-16 rounded-full bg-green-900/20 items-center justify-center mb-4">
+                <Check size={32} color="#4ADE80" />
+              </View>
+              <Text className="text-gray-300 text-center">All seat types are already added</Text>
             </View>
           ) : (
             SEAT_TYPES.filter(t => !options.find(o => o.type === t)).map((type) => (
               <TouchableOpacity
                 key={type}
-                className="w-full py-4 mb-3 rounded-xl bg-indigo-600 items-center shadow-sm flex-row justify-center"
+                className="w-full py-4 mb-3 rounded-xl bg-purple-700 items-center shadow-sm flex-row justify-center"
                 onPress={() => {
                   setOptions(prev => [
                     ...prev,
@@ -421,16 +503,16 @@ export const SeatOptionsSection = forwardRef<SeatOptionsSectionHandle, Props & {
           )}
           
           <TouchableOpacity
-            className="w-full py-3 mt-3 rounded-xl border border-gray-300 items-center"
+            className="w-full py-3.5 mt-3 rounded-xl border border-[#2d2d3a] items-center"
             onPress={() => setDrawerOpen(false)}
             accessibilityRole="button"
             accessibilityLabel="Cancel"
             activeOpacity={0.85}
           >
-            <Text className="text-gray-700 font-medium text-base">Cancel</Text>
+            <Text className="text-gray-300 font-medium text-base">Cancel</Text>
           </TouchableOpacity>
         </View>
       )}
     </View>
   );
-});
+}
