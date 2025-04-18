@@ -2,7 +2,7 @@ import { useCallback } from 'react';
 import { useAuthStore } from '../store/auth-store';
 import { supabase } from '../../../lib/supabase';
 import { SignInInput, SignUpInput } from '../schemas/auth-schema';
-import { UserProfile } from '../store/auth-store';
+import { UserProfile, UserProfileSchema } from '../schemas/user-profile-schema';
 
 const fetchProfile = async (userId: string): Promise<UserProfile | null> => {
   const { data, error } = await supabase
@@ -10,8 +10,9 @@ const fetchProfile = async (userId: string): Promise<UserProfile | null> => {
     .select('*')
     .eq('id', userId)
     .single();
-  if (error) return null;
-  return data as UserProfile;
+  if (error || !data) return null;
+  const parsed = UserProfileSchema.safeParse(data);
+  return parsed.success ? parsed.data : null;
 };
 
 function sleep(ms: number) {

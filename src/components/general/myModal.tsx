@@ -141,8 +141,24 @@ const myModal: React.FC<myModalProps> = ({
           </View>
         </AnimatedView>
       </GestureDetector>
+      
     </Modal>
+    
   );
 };
 
 export default myModal;
+
+/* 
+
+<Modal visible={isModalVisible}
+   onRequestClose={() => setIsModalVisible(false)}
+   animationType='slide'
+   presentationStyle='pageSheet'
+   >
+    <View>
+        <Text>Test</Text>
+    </View>
+    </Modal>
+
+*/

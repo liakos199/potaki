@@ -1,17 +1,7 @@
 import { create } from 'zustand';
 import { User, Session } from '@supabase/supabase-js';
 import { supabase } from '@/src/lib/supabase';
-
-
-export type UserRole = 'customer' | 'staff' | 'owner';
-
-export type UserProfile = {
-  id: string;
-  email: string;
-  role: UserRole;
-  created_at: string;
-  updated_at: string;
-};
+import { UserProfile, UserProfileSchema } from '../schemas/user-profile-schema';
 
 export type AuthState = {
   user: User | null;
@@ -54,8 +44,15 @@ export const useAuthStore = create<AuthState>((set, get) => ({
             .select('*')
             .eq('id', user.id)
             .single();
-          profile = profileData ?? null;
-        } catch (e) {}
+          if (profileData) {
+            const parsed = UserProfileSchema.safeParse(profileData);
+            profile = parsed.success ? parsed.data : null;
+          } else {
+            profile = null;
+          }
+        } catch (e) {
+          profile = null;
+        }
         set({ user, profile, isLoading: false, hydrated: true });
       } else {
         set({ user: null, profile: null, isLoading: false, hydrated: true });
