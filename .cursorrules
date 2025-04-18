@@ -6,7 +6,7 @@ You are an expert AI assistant specialized in the following stack and practices 
 - **State Management:** Zustand (Global Client State), React Query (Server State, Caching, Mutations)
 - **Backend:** Supabase (Auth, PostgreSQL, RLS, Realtime, Edge Functions [Deno/TS], Storage, RPC Functions)
 - **Styling:** NativeWind (Tailwind CSS for React Native)
-- **UI Components:** Core React Native components styled with NativeWind. Use `expo-image`, `react-native-maps`, `react-native-toast-message`.
+- **UI Components:** Core React Native components styled with NativeWind. Use `expo-image`, `react-native-maps`, `Toast.tsx component`.
 - **Forms & Validation:** React Hook Form + Zod
 - **Utilities:** `react-native-safe-area-context`, `expo-constants`/`expo-env`, `date-fns`
 - **Practices:** Functional components, modular structure (feature-based preferred), strict TypeScript, comprehensive RLS, secure Edge Functions/RPCs, Realtime subscriptions, unit/integration testing (Jest/Vitest + RNTL).
@@ -43,7 +43,7 @@ UI and Styling
 - Use **`react-native-maps`** for map displays.
 - Implement layouts using Flexbox via NativeWind classes (`flex`, `flex-row`, `justify-center`, etc.).
 - Ensure high accessibility (a11y) using `accessibilityLabel`, `accessibilityRole`, etc.
-- Use **`react-native-toast-message`** for non-blocking user feedback.
+- Use **`Toast.tsx component`** for non-blocking user feedback.
 
 Safe Area Management
 - **Mandatory:** Use `SafeAreaProvider` at the root (`app/_layout.tsx`).
@@ -73,7 +73,7 @@ State Management
 Error Handling and Validation
 - Use **Zod** extensively for runtime validation: forms, API/Edge Function/RPC inputs & outputs, environment variables.
 - Implement **Error Boundaries** around major app sections/routes.
-- Handle errors explicitly from Supabase calls, React Query (`error`, `isError`), and form submissions. Display user-friendly errors (`react-native-toast-message` or inline).
+- Handle errors explicitly from Supabase calls, React Query (`error`, `isError`), and form submissions. Display user-friendly errors (`toast.show` or inline).
 - Design Edge Functions/RPCs to return discriminated unions or structured errors validated by Zod (e.g., `{ success: true, data: T } | { success: false, error: { code: string, message: string } }`).
 - Use guard clauses/early returns.
 
@@ -96,7 +96,7 @@ Supabase Specifics
 - Write maintainable SQL for schema, RLS, triggers, RPCs. Comment complex logic.
 
 Key Libraries & Expo Modules
-- **Mandatory:** Expo SDK, `expo-router`, `zustand`, `@tanstack/react-query`, `@supabase/supabase-js`, `nativewind`, `tailwindcss`, `react-hook-form`, `zod`, `react-native-safe-area-context`, `react-native-maps`, `expo-image`, `date-fns`, `react-native-toast-message`.
+- **Mandatory:** Expo SDK, `expo-router`, `zustand`, `@tanstack/react-query`, `@supabase/supabase-js`, `nativewind`, `tailwindcss`, `react-hook-form`, `zod`, `react-native-safe-area-context`, `react-native-maps`, `expo-image`, `date-fns`, `Toast.tsx component`.
 - **Likely:** `expo-constants` / `expo-env`, `expo-notifications`.
 - **Dev:** `typescript`, `@types/react`, `@types/react-native`, `prettier`, testing libraries.
 

@@ -84,7 +84,7 @@ This phased approach builds the core functionality first, then enhances it with 
 * Real-time UI Updates: Implementing Supabase real-time subscriptions to instantly update the UI for changes in reservations, reviews, or events.
 * Push Notifications: Setting up and sending push notifications (via Expo) for reservation updates, event reminders, etc.
 5. UI Enhancements:
-* Toast Messages: Implementing specific UI feedback like toast messages (e.g., using react-native-toast-message) for actions.
+* Toast Messages: Implementing specific UI feedback like toast messages (e.g., using Toast.tsx (toast.show)) for actions.
 * Reservation Progress Bar: Adding a visual progress indicator (e.g., using react-native-progress) for the multi-step reservation process.
 6. Specific Role Permissions (Refinements):
 * While basic role access exists, the specific permissions outlined in the required features (Customers making reservations/reviews, Staff managing reservations) need implementation.

@@ -4,9 +4,10 @@ import { View, Text, ActivityIndicator, TouchableOpacity, FlatList } from 'react
 import { useRouter } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
 import { useAuthStore } from '@/src/features/auth/store/auth-store';
-import Toast from 'react-native-toast-message';
 import { supabase } from '@/src/lib/supabase';
 import type { Database } from '@/src/lib/database.types';
+import { useToast } from '@/src/components/general/Toast';
+
 type Profile = Database['public']['Tables']['profiles']['Row'];
 type Bar = Database['public']['Tables']['bars']['Row'];
 
@@ -14,7 +15,7 @@ const AdminPanelScreen = (): JSX.Element => {
   const router = useRouter();
   const profile: Profile | null = useAuthStore((s) => s.profile);
   const isLoading = useAuthStore((s) => s.isLoading);
-
+  const toast = useToast();
   // Fetch bars owned by the user
   const {
     data: bars,
@@ -37,7 +38,7 @@ const AdminPanelScreen = (): JSX.Element => {
   // Error feedback
   React.useEffect(() => {
     if (barsError) {
-      Toast.show({ type: 'error', text1: 'Error loading bars', text2: barsError.message });
+      toast.show({ type: 'error', text1: 'Error loading bars', text2: barsError.message });
     }
   }, [barsError]);
 

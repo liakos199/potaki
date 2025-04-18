@@ -229,7 +229,7 @@ Implement the full reservation lifecycle: Customers can book seats, view their r
     *   Integrate the multi-step UI using `react-native-progress`.
     *   Display real-time availability for seat options.
     *   Conditionally show drink selection based on `bars.is_drink_selection_mandatory`.
-    *   On final confirmation, call the `createReservation` Edge Function using a React Query mutation (`useMutation`). Handle loading/error states, show feedback with `react-native-toast-message`. Navigate on success.
+    *   On final confirmation, call the `createReservation` Edge Function using a React Query mutation (`useMutation`). Handle loading/error states, show feedback with `Toast.tsx ( toast.show )`. Navigate on success.
 *   **My Reservations Screen (Customer - e.g., `(app)/reservations/index.tsx`):**
     *   Use `useQuery` to fetch the user's reservations (`filter('user_id', 'eq', userId)`).
     *   Display reservation details and status.

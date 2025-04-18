@@ -1,5 +1,3 @@
-Okay, here's the updated feature breakdown organized by the specified pages, incorporating the use of Zod for validation and TanStack libraries (like TanStack Query for data fetching/caching/state management and TanStack Mutations for CUD operations) for the frontend implementation.
-
 Actor: User with role = 'owner' in profiles table.
 
 Tech Stack Context: React/Next.js frontend using Zod for schema validation and TanStack (Query, Table, potentially Form) for data management and UI interactions. Supabase (or similar) backend exposing API endpoints for these database operations.
@@ -8,7 +6,7 @@ Authorization Context: All actions performed after selecting a bar (drinks.tsx, 
 
 Phase 1: Before Selecting a Specific Bar
 
-1. admin-panel.tsx (Owner's Dashboard / Bar Selection)
+admin-panel.tsx (Owner's Dashboard / Bar Selection) -- ALREADY DONE
 
 Purpose: Provide an overview for the owner and allow selection of a specific bar to manage.
 
@@ -32,7 +30,7 @@ Frontend: Provide a clear button/link ("Create New Bar") that navigates the user
 
 (Optional: Display User Information - Depending on requirements, could show a summary of users, maybe filtered by staff status across owned bars, requiring more complex queries.)
 
-2. create-bar.tsx (New Bar Creation Form)
+create-bar.tsx (New Bar Creation Form) -- ALREADY DONE
 
 Purpose: Allow the owner to add a new bar to the system.
 
@@ -48,7 +46,7 @@ Input (Form Fields): address, location (needs appropriate UI input, e.g., map se
 
 Input (Implicit): owner_id (derived from the logged-in user's session).
 
-Frontend Validation: Use a zod schema to validate the required fields (address, location, name) before submission. TanStack Form could integrate with Zod.
+Frontend Validation: Use a Zod schema to validate the required fields (address, location, name) before submission. TanStack Form could integrate with Zod.
 
 Frontend Mutation: Use useMutation (TanStack Query) to handle the API call for inserting the bar record. Manage loading states and display success/error feedback.
 
@@ -56,7 +54,7 @@ On Success: Typically navigate the user to the admin-panel.tsx or directly to th
 
 Phase 2: After Selecting a Specific Bar (Context: bar_id)
 
-3. drinks.tsx (Manage Selected Bar's Drinks)
+drinks.tsx (Manage Selected Bar's Drinks) -- ALREADY DONE
 
 Purpose: Manage the drink menu (especially pre-order options) for the currently selected bar.
 
@@ -76,11 +74,11 @@ Entity: drink_options
 
 Operation: Insert
 
-Input (Form): price, type, Optional: name.
+Input (Form): price (number), type (Enum: drink_option_type), Optional: name (string | null).
 
 Input (Implicit): bar_id (from context).
 
-Frontend Validation: zod schema for the drink form.
+Frontend Validation: Zod schema for the drink form.
 
 Frontend Mutation: useMutation to add the new drink, invalidating the drinks list query on success to refetch.
 
@@ -90,11 +88,11 @@ Entity: drink_options
 
 Operation: Update
 
-Input (Form): id (drink option ID), Subset of drink_options.Update fields.
+Input (Form): id (drink option ID), Subset of drink_options.Update fields (e.g., price, type, name).
 
 Input (Implicit): bar_id (for authorization check).
 
-Frontend Validation: zod schema for the update form.
+Frontend Validation: Zod schema for the update form.
 
 Frontend Mutation: useMutation to update, invalidating the list query on success. Triggered from an "Edit" action on a specific drink in the list.
 
@@ -110,7 +108,8 @@ Input (Implicit): bar_id (for authorization check).
 
 Frontend Mutation: useMutation to delete, invalidating the list query on success. Triggered from a "Delete" action.
 
-4. edit.tsx (Manage Selected Bar's Information)
+
+edit.tsx (Manage Selected Bar's Information)
 
 Purpose: Edit the core details, operating hours, exceptions, and seating for the selected bar.
 
@@ -130,11 +129,11 @@ Entity: bars
 
 Operation: Update
 
-Input (Form): Subset of bars.Update fields.
+Input (Form): Subset of bars.Update fields (e.g., name, address, description, phone, website, live, reservation_hold_until).
 
 Input (Implicit): bar_id.
 
-Frontend Validation: zod schema for the bar details form.
+Frontend Validation: Zod schema for the bar details form.
 
 Frontend Mutation: useMutation to update bar details, invalidating the bar query on success.
 
@@ -142,21 +141,27 @@ Actions: Read/Create/Update/Delete Operating Hours Records (as described previou
 
 Entities: operating_hours
 
-Frontend: useQuery for list, useMutation for CUD operations, zod for forms. Invalidate query on mutations.
+Fields: day_of_week, open_time, close_time, closes_next_day.
+
+Frontend: useQuery for list, useMutation for CUD operations, Zod for forms. Invalidate query on mutations.
 
 Actions: Read/Create/Update/Delete Bar Exception Records (as described previously)
 
 Entities: bar_exceptions
 
-Frontend: useQuery for list, useMutation for CUD operations, zod for forms. Invalidate query on mutations.
+Fields: exception_date, is_closed, open_time, close_time, closes_next_day.
+
+Frontend: useQuery for list, useMutation for CUD operations, Zod for forms. Invalidate query on mutations.
 
 Actions: Read/Create/Update/Delete Seat Option Records (as described previously)
 
 Entities: seat_options
 
-Frontend: useQuery for list, useMutation for CUD operations, zod for forms. Invalidate query on mutations.
+Fields: type, available_count, min_people, max_people, enabled.
 
-5. reservations.tsx (Manage Selected Bar's Reservations)
+Frontend: useQuery for list, useMutation for CUD operations, Zod for forms. Invalidate query on mutations.
+
+reservations.tsx (Manage Selected Bar's Reservations)
 
 Purpose: View, manage status, and manually create reservations for the selected bar.
 
@@ -164,7 +169,7 @@ Features:
 
 Action: Read Reservation Records
 
-Entity: reservations (potentially joined with profiles, seat_options)
+Entity: reservations (potentially joined with profiles on customer_id)
 
 Operation: Select (Row) filtered by bar_id, likely with date filters.
 
@@ -184,7 +189,7 @@ Entity: reservations
 
 Operation: Update (e.g., changing status, setting checked_in_at).
 
-Input: id (reservation ID), fields to update.
+Input: id (reservation ID), fields to update (subset of reservations.Update).
 
 Input (Implicit): bar_id.
 
@@ -196,15 +201,15 @@ Entity: reservations
 
 Operation: Insert
 
-Input (Form): customer_id (needs user search/selection UI), party_size, reservation_date, seat_option_id (needs dropdown populated via seat_options query for this bar), Optional: special_requests, status.
+Input (Form): customer_id (needs user search/selection UI), party_size, reservation_date, seat_type (Enum: seat_option_type, needs dropdown populated via seat_options query for this bar), Optional: special_requests, status (Enum: reservation_status).
 
 Input (Implicit): bar_id.
 
-Frontend Validation: zod schema for the manual reservation form.
+Frontend Validation: Zod schema for the manual reservation form.
 
 Frontend Mutation: useMutation to create, invalidating the reservations list query on success.
 
-6. staff.tsx (Manage Selected Bar's Staff)
+staff.tsx (Manage Selected Bar's Staff)
 
 Purpose: Assign/unassign users as staff for the selected bar and manage their roles.
 
@@ -212,7 +217,7 @@ Features:
 
 Action: Read Assigned Staff Members
 
-Entity: staff_assignments (joined with profiles)
+Entity: staff_assignments (joined with profiles on staff_user_id)
 
 Operation: Select (Row) filtered by bar_id.
 
@@ -224,7 +229,7 @@ Entity: staff_assignments
 
 Operation: Insert
 
-Input (UI): Requires searching/selecting an existing user (target_user_id from profiles).
+Input (UI): Requires searching/selecting an existing user (target_user_id from profiles which becomes staff_user_id in the insert payload).
 
 Input (Implicit): bar_id, assigned_by_owner_id (Owner's ID).
 
@@ -244,20 +249,22 @@ Frontend Mutation: useMutation to delete, invalidating the staff list query on s
 
 Action: Promote User to Staff Role (Function Call)
 
-Entity: profiles, staff_assignments (via DB function)
+Entity: profiles, staff_assignments (via DB function promote_to_staff)
 
 Operation: Call promote_to_staff function.
 
-Input: target_user_id, assigned_bar_id (bar_id from context).
+Input: target_user_id (string), assigned_bar_id (string, bar_id from context).
 
 Frontend Mutation: useMutation to call the function endpoint. May need to invalidate both staff list and potentially user list queries.
 
 Action: Demote Staff Member (Function Call)
 
-Entity: profiles, staff_assignments (via DB function)
+Entity: profiles, staff_assignments (via DB function demote_staff)
 
 Operation: Call demote_staff function.
 
-Input: target_user_id, bar_id (from context).
+Input: target_user_id (string), bar_id (string, from context).
 
 Frontend Mutation: useMutation to call the function endpoint. Invalidate relevant queries on success.
+
+--- END OF FILE owner-features.md ---

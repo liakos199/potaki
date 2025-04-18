@@ -2,15 +2,20 @@ import { View, Text, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
 import { useAuthStore } from '@/src/features/auth/store/auth-store';
-import Toast from 'react-native-toast-message';
 import { supabase } from '@/src/lib/supabase';
 import type { Database } from '@/src/lib/database.types';
+import { useToast } from '@/src/components/general/Toast';
+import * as React from 'react';
 
 const BarOptionsScreen = (): JSX.Element | null => {
   const router = useRouter();
   const { barId } = useLocalSearchParams<{ barId: string }>();
   const profile = useAuthStore((s) => s.profile);
-
+  const toast = useToast();
+  const [isDeleting, setIsDeleting] = React.useState(false);
+  const handleDelete = async () => {
+   
+  };
   // Fetch bar details
   const {
     data: bar,
@@ -32,7 +37,7 @@ const BarOptionsScreen = (): JSX.Element | null => {
 
   // Ownership enforcement
   if (!barLoading && bar && profile && bar.owner_id !== profile.id) {
-    Toast.show({ type: 'error', text1: 'Access denied', text2: 'You are not the owner of this bar.' });
+    toast.show({ type: 'error', text1: 'Access denied', text2: 'You are not the owner of this bar.' });
     router.replace('/(admin)/admin-panel');
     return null;
   }
@@ -101,6 +106,15 @@ const BarOptionsScreen = (): JSX.Element | null => {
           onPress={() => router.push(`/(admin)/bar/${barId}/staff`)}
         >
           <Text className="text-gray-800 font-medium">Manage Bar Staff</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          className="bg-red-600 px-6 py-4 rounded-lg items-center"
+          accessibilityRole="button"
+          accessibilityLabel="Delete Bar"
+          activeOpacity={0.85}
+          onPress={() => handleDelete()}
+        >
+          <Text className="text-white font-medium">Delete Bar</Text>
         </TouchableOpacity>
       </View>
     </View>

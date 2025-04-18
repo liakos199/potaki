@@ -3,11 +3,11 @@ import { View, Text, TextInput, TouchableOpacity, SafeAreaView } from 'react-nat
 import { useForm, Controller } from 'react-hook-form';
 import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
-import Toast from 'react-native-toast-message';
 import { useRouter } from 'expo-router';
 import { useAuthStore } from '@/src/features/auth/store/auth-store';
 import { supabase } from '@/src/lib/supabase';
 import type { TablesInsert } from '@/src/lib/database.types';
+import { useToast } from '@/src/components/general/Toast';
 
 const createBarSchema = z.object({
   name: z.string().min(2, 'Name is required'),
@@ -29,10 +29,11 @@ const CreateBarScreen = (): JSX.Element => {
     resolver: zodResolver(createBarSchema),
     defaultValues: { name: '', address: '', latitude: undefined, longitude: undefined },
   });
+  const toast = useToast();
 
   const onSubmit = async (values: CreateBarValues) => {
     if (!user) {
-      Toast.show({ type: 'error', text1: 'Not authenticated' });
+      toast.show({ type: 'error', text1: 'Not authenticated' });
       return;
     }
     try {
@@ -42,12 +43,12 @@ const CreateBarScreen = (): JSX.Element => {
         owner_id: user.id,
         location: `POINT(${longitude} ${latitude})`,
       } as TablesInsert<'bars'>);
-      Toast.show({ type: 'success', text1: 'Bar created!' });
+      toast.show({ type: 'success', text1: 'Bar created!' });
       reset();
       router.replace('/admin-panel');
     } catch (err: any) {
       const errorMsg = err?.message || err?.error_description || 'An unknown error occurred';
-      Toast.show({ type: 'error', text1: 'Error', text2: errorMsg });
+      toast.show({ type: 'error', text1: 'Error', text2: errorMsg });
     }
   };
 

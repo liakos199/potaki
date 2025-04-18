@@ -209,7 +209,9 @@ export type Database = {
       reservation_drinks: {
         Row: {
           created_at: string
+          drink_name_at_booking: string
           drink_option_id: string | null
+          drink_type_at_booking: Database["public"]["Enums"]["drink_option_type"]
           id: string
           price_at_booking: number
           quantity: number
@@ -217,7 +219,9 @@ export type Database = {
         }
         Insert: {
           created_at?: string
+          drink_name_at_booking: string
           drink_option_id?: string | null
+          drink_type_at_booking: Database["public"]["Enums"]["drink_option_type"]
           id?: string
           price_at_booking: number
           quantity: number
@@ -225,7 +229,9 @@ export type Database = {
         }
         Update: {
           created_at?: string
+          drink_name_at_booking?: string
           drink_option_id?: string | null
+          drink_type_at_booking?: Database["public"]["Enums"]["drink_option_type"]
           id?: string
           price_at_booking?: number
           quantity?: number
@@ -257,7 +263,7 @@ export type Database = {
           id: string
           party_size: number
           reservation_date: string
-          seat_option_id: string
+          seat_type: Database["public"]["Enums"]["seat_option_type"]
           special_requests: string | null
           status: Database["public"]["Enums"]["reservation_status"]
           updated_at: string
@@ -270,7 +276,7 @@ export type Database = {
           id?: string
           party_size: number
           reservation_date: string
-          seat_option_id: string
+          seat_type: Database["public"]["Enums"]["seat_option_type"]
           special_requests?: string | null
           status?: Database["public"]["Enums"]["reservation_status"]
           updated_at?: string
@@ -283,7 +289,7 @@ export type Database = {
           id?: string
           party_size?: number
           reservation_date?: string
-          seat_option_id?: string
+          seat_type?: Database["public"]["Enums"]["seat_option_type"]
           special_requests?: string | null
           status?: Database["public"]["Enums"]["reservation_status"]
           updated_at?: string
@@ -301,13 +307,6 @@ export type Database = {
             columns: ["customer_id"]
             isOneToOne: false
             referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "reservations_seat_option_id_fkey"
-            columns: ["seat_option_id"]
-            isOneToOne: false
-            referencedRelation: "seat_options"
             referencedColumns: ["id"]
           },
         ]

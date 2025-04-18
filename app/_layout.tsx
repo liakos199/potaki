@@ -8,6 +8,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'; // You
 import { GestureHandlerRootView } from 'react-native-gesture-handler'; // Import Gesture Handler
 import { StyleSheet } from 'react-native'; // Import StyleSheet
 import "./global.css"; // Your global NativeWind styles
+import { ToastProvider } from '@/src/components/general/Toast';
 
 const queryClient = new QueryClient(); // Your existing setup
 
@@ -22,9 +23,10 @@ export default function RootLayout() {
     // Your existing providers
     <QueryClientProvider client={queryClient}>
       <SafeAreaProvider>
-        {/* Wrap your Navigator with GestureHandlerRootView */}
         <GestureHandlerRootView style={styles.container}>
-          <Stack screenOptions={{ headerShown: false }} />
+          <ToastProvider>
+            <Stack screenOptions={{ headerShown: false }} />
+          </ToastProvider>
         </GestureHandlerRootView>
       </SafeAreaProvider>
     </QueryClientProvider>
