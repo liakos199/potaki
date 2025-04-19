@@ -1,164 +1,191 @@
-// src/components/myModal.tsx
-import React, { useEffect, ReactNode } from 'react';
+import React, { useEffect } from 'react';
+import { Modal, View, Text, TouchableOpacity, Platform, ScrollView, ActivityIndicator } from 'react-native';
+import { useForm, SubmitHandler } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { X, AlertCircle } from 'lucide-react-native'; // Added AlertCircle
+
 import {
-  Modal,
-  View, // Using standard View for NativeWind styling
-  useWindowDimensions,
-  StatusBar,
-  Platform,
-} from 'react-native';
-import { Gesture, GestureDetector } from 'react-native-gesture-handler';
-import Animated, {
-  useSharedValue,
-  useAnimatedStyle,
-  withSpring,
-  withTiming,
-  runOnJS,
-} from 'react-native-reanimated';
+  Bar,
+  barFormSchema,
+  BarFormValues,
+  FormInput,
+  FormSwitch
+} from '../../features/owner-components/bar-info-section'; // Ensure path is correct
+import SaveButton from './SaveButton';
 
-// --- Configuration Constants ---
-const CLOSE_THRESHOLD_VELOCITY = 800; // Velocity needed to trigger close
-const CLOSE_THRESHOLD_TRANSLATE_Y = 0.3; // Drag distance needed (30% of screen height)
-const SPRING_CONFIG = { // Animation physics for snapping back
-  damping: 50,
-  stiffness: 400,
-  mass: 0.5,
+export type EditableField = keyof BarFormValues;
+
+const fieldHelperText: { [key in EditableField]?: { purpose: string; format?: string } } = {
+  name: { purpose: "Displayed publicly as the bar's name." },
+  address: { purpose: "The full street address.", format: "e.g., 123 Main St, Anytown, CA 91234" },
+  location: { purpose: "Text description or coordinates for map placement.", format: "e.g., Downtown Anytown or 40.7128, -74.0060" },
+  description: { purpose: "A short public description (max 500 chars)." },
+  phone: { purpose: "Public contact phone number.", format: "e.g., (555) 123-4567" },
+  website: { purpose: "The bar's official website URL.", format: "Must start with http:// or https://" },
+  reservation_hold_until: { purpose: "Time tables are held if patrons are late.", format: "Use 24-hour format (HH:MM)." },
+  live: { purpose: "Controls if the bar appears in public listings.", format: "'Live' means visible, 'Not Live' means hidden." },
 };
-// --- End Configuration Constants ---
 
-interface myModalProps {
+type myModalProps = {
   visible: boolean;
   onClose: () => void;
-  children: ReactNode; // Content for the modal
-}
-
-// Create an Animated version of View for applying animated styles
-const AnimatedView = Animated.createAnimatedComponent(View);
+  onSave: (data: Partial<BarFormValues>) => Promise<void>;
+  barData: Bar | null;
+  editingField: EditableField | null;
+  isSaving: boolean;
+};
 
 const myModal: React.FC<myModalProps> = ({
   visible,
   onClose,
-  children,
+  onSave,
+  barData,
+  editingField,
+  isSaving,
 }) => {
-  const { height: screenHeight } = useWindowDimensions();
-  // Shared value to track vertical translation (animated)
-  const translateY = useSharedValue(0);
-  // Shared value to store the starting position of the drag
-  const context = useSharedValue({ y: 0 });
-
-  // Calculate the pixel threshold for closing based on screen height
-  const closeThresholdY = screenHeight * CLOSE_THRESHOLD_TRANSLATE_Y;
-
-  // Reset modal position when visibility changes
-  useEffect(() => {
-    if (visible) {
-      // Start at the top when becoming visible (Modal's animation handles entry)
-      translateY.value = 0;
-    } else {
-      // Reset immediately when closed externally or before next open
-       translateY.value = 0;
-       context.value = { y: 0 };
-    }
-  }, [visible, screenHeight, translateY, context]);
-
-  // --- Pan Gesture Definition ---
-  const panGesture = Gesture.Pan()
-    .onStart(() => {
-      // Store the current Y position when drag starts
-      context.value = { y: translateY.value };
-    })
-    .onUpdate((event) => {
-      // Update translateY based on drag, but prevent dragging upwards past the initial top position
-      translateY.value = Math.max(0, context.value.y + event.translationY);
-    })
-    .onEnd((event) => {
-      // Check if drag distance or velocity meets the threshold to close
-      const shouldClose =
-        event.translationY > closeThresholdY ||
-        event.velocityY > CLOSE_THRESHOLD_VELOCITY;
-
-      if (shouldClose) {
-        // Animate slightly further down quickly *before* calling onClose
-        // This avoids conflicting with the Modal's own closing animation
-        translateY.value = withTiming(screenHeight * 0.4, { duration: 150 }, () => {
-            // Safely call the JavaScript onClose function from the UI thread
-            runOnJS(onClose)();
-        });
-      } else {
-        // Drag didn't meet threshold, snap back to the top with a spring animation
-        translateY.value = withSpring(0, SPRING_CONFIG);
-      }
-    });
-  // --- End Pan Gesture Definition ---
-
-  // --- Animated Style Definition ---
-  // This style object reacts to changes in the `translateY` shared value
-  const animatedModalStyle = useAnimatedStyle(() => {
-    return {
-      // Apply the vertical translation
-      transform: [{ translateY: translateY.value }],
-    };
+  const {
+    control,
+    handleSubmit,
+    reset,
+    formState: { errors, isDirty },
+  } = useForm<BarFormValues>({
+    resolver: zodResolver(barFormSchema),
+    defaultValues: {},
   });
-  // --- End Animated Style Definition ---
+
+  useEffect(() => {
+    if (visible && barData) {
+       const defaultValues: BarFormValues = {
+           name: barData.name ?? '', address: barData.address ?? '',
+           location: typeof barData.location === 'string' ? barData.location : barData.location ? JSON.stringify(barData.location) : '',
+           description: barData.description ?? '', phone: barData.phone ?? '', website: barData.website ?? '',
+           reservation_hold_until: barData.reservation_hold_until ? barData.reservation_hold_until.substring(0, 5) : '',
+           live: barData.live ?? false,
+       };
+      reset(defaultValues);
+    } else {
+       reset({ name: '', address: '', location: '', description: '', phone: '', website: '', reservation_hold_until: '', live: false });
+    }
+  }, [visible, barData, reset]);
+
+  const onSubmit: SubmitHandler<BarFormValues> = async (data) => {
+    if (!editingField) return;
+    const updatedValue = { [editingField]: data[editingField] };
+    try { await onSave(updatedValue); } catch (error) {/* Handled by parent */}
+  };
+
+  const renderHelperText = () => {
+    if (!editingField) return null;
+    const helper = fieldHelperText[editingField];
+    if (!helper) return null;
+    return (
+      <View className="mt-1.5 px-1">
+         <Text className="text-xs text-gray-500">
+           {helper.purpose}
+           {helper.format && <Text className="text-gray-400"> {helper.format}</Text>}
+         </Text>
+      </View>
+    );
+  };
+
+   const renderErrorText = () => {
+        if (!editingField || !errors[editingField]) return null;
+        return (
+            <View className="mt-1 px-1 flex-row items-center">
+                <AlertCircle size={12} className="text-red-500 mr-1" />
+                <Text className="text-xs text-red-600">{String(errors[editingField]?.message)}</Text>
+            </View>
+        );
+   }
+
+  const renderInputField = () => {
+    if (!editingField || !barData) return ( <View className="py-8 items-center"><ActivityIndicator/></View> );
+    let inputComponent: React.ReactNode = null;
+
+    switch (editingField) {
+      case 'name':
+        inputComponent = <FormInput label="Bar Name" name="name" control={control} errors={errors} placeholder="Enter bar name" autoCapitalize="words" />;
+        break;
+      case 'address':
+        inputComponent = <FormInput label="Address" name="address" control={control} errors={errors} placeholder="e.g., 123 Main St, Anytown" autoCapitalize="words" />;
+        break;
+      case 'location':
+        inputComponent = <FormInput label="Location Info / Coordinates" name="location" control={control} errors={errors} placeholder="e.g., Downtown or 40.7,-74.0" autoCapitalize="words" />;
+        break;
+      case 'description':
+        inputComponent = <FormInput label="Description" name="description" control={control} errors={errors} placeholder="Public description..." multiline={true} numberOfLines={4} autoCapitalize="sentences" />;
+        break;
+      case 'phone':
+        inputComponent = <FormInput label="Phone Number" name="phone" control={control} errors={errors} placeholder="(555) 123-4567" keyboardType="phone-pad" />;
+        break;
+      case 'website':
+        inputComponent = <FormInput label="Website" name="website" control={control} errors={errors} placeholder="https://example.com" keyboardType="url" autoCapitalize="none" />;
+        break;
+      case 'reservation_hold_until':
+        inputComponent = <FormInput label="Reservation Hold Time (HH:MM)" name="reservation_hold_until" control={control} errors={errors} placeholder="e.g., 17:00" keyboardType={Platform.OS === 'ios' ? 'numbers-and-punctuation' : 'numeric'} autoCapitalize="none" />;
+        break;
+      case 'live':
+        inputComponent = <FormSwitch label="Bar Status" name="live" control={control} labelDescription="Visible to public?" />;
+        break;
+      default:
+        const exhaustiveCheck: never = editingField;
+        inputComponent = <Text className="text-red-500 text-xs">Unknown field: {exhaustiveCheck}</Text>;
+    }
+
+    return (
+        <View className="mb-3">
+            {inputComponent}
+            {renderErrorText()}
+            {renderHelperText()}
+        </View>
+    );
+  };
+
+  const getModalTitle = () => {
+    if (!editingField) return "Edit Information";
+    let title = editingField.charAt(0).toUpperCase() + editingField.slice(1).replace(/_/g, ' ');
+    if (title === "Reservation hold until") title = "Hold Time";
+    return `Edit ${title}`;
+  };
 
   return (
     <Modal
-      transparent={true} // Essential for the animated view underneath to be visible
+      animationType="slide"
+      transparent={false}
+      presentationStyle="pageSheet"
       visible={visible}
-      onRequestClose={onClose} // Handles Android back button press
-      animationType="slide" // Use the standard slide-up animation for entry
+      onRequestClose={onClose}
     >
-      {/* Conditionally render StatusBar style change */}
-      {visible && <StatusBar barStyle="light-content" />}
+      <View className="flex-1 bg-white">
+        <View className="flex-row justify-between items-center p-4 border-b border-gray-200">
+          <Text className="text-base font-medium text-gray-800">{getModalTitle()}</Text>
+          <TouchableOpacity onPress={onClose} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} className="p-1">
+            <X size={20} className="text-gray-500" />
+          </TouchableOpacity>
+        </View>
 
-      {/* Attach the pan gesture handler */}
-      <GestureDetector gesture={panGesture}>
-        {/* This AnimatedView is the main visual container that gets dragged */}
-        <AnimatedView
-          // Apply static styles via NativeWind + dynamic transform via style prop
-          style={[{ height: screenHeight }, animatedModalStyle]} // Combine height and animated transform
-          className={`
-            flex-1 justify-end /* Push content towards bottom initially if needed, though flex-1 handles it */
-            ${Platform.OS === 'ios' ? 'bg-neutral-100' : 'bg-white'} /* iOS sheet-like bg */
-            rounded-t-2xl /* Rounded top corners */
-            shadow-lg shadow-black/20 /* Add shadow */
-            android:elevation-10 /* Android specific elevation */
-          `}
-        >
-          {/* Drag Handle Indicator */}
-          <View
-            className="items-center pt-3 pb-2 rounded-t-2xl" // Center handle, add padding
-          >
-            <View
-              className="w-10 h-[5px] bg-gray-400 rounded-full" // Style the handle bar
-            />
-          </View>
+        <ScrollView className="flex-1" keyboardShouldPersistTaps="handled" contentContainerStyle={{ padding: 16 }}>
+            {renderInputField()}
+        </ScrollView>
 
-          {/* Content Area */}
-          <View className="flex-1 overflow-hidden">
-            {/* The content passed from the parent component goes here */}
-            {children}
-          </View>
-        </AnimatedView>
-      </GestureDetector>
-      
+        <View className="px-4 py-3 border-t border-gray-200 bg-white flex-row justify-end items-center space-x-3">
+           <TouchableOpacity
+              onPress={onClose}
+              disabled={isSaving}
+              className={`py-2 px-4 rounded-md border border-gray-300 bg-white ${isSaving ? 'opacity-60' : 'hover:bg-gray-50 active:bg-gray-100'}`}
+            >
+              <Text className="text-sm font-medium text-gray-700">Cancel</Text>
+            </TouchableOpacity>
+          <SaveButton
+            title="Save Changes"
+            onPress={handleSubmit(onSubmit)}
+            loading={isSaving}
+            disabled={!isDirty || isSaving}
+          />
+        </View>
+      </View>
     </Modal>
-    
   );
 };
 
 export default myModal;
-
-/* 
-
-<Modal visible={isModalVisible}
-   onRequestClose={() => setIsModalVisible(false)}
-   animationType='slide'
-   presentationStyle='pageSheet'
-   >
-    <View>
-        <Text>Test</Text>
-    </View>
-    </Modal>
-
-*/

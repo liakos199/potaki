@@ -7,9 +7,10 @@ import {
   ScrollView,
   Switch,
 } from "react-native";
+import Animated, { useSharedValue, useAnimatedStyle, withTiming } from 'react-native-reanimated';
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { supabase } from "@/src/lib/supabase"; // Adjust path as needed
-import { useToast } from "@/src/components/general/Toast"; // Adjust path as needed
+import { supabase } from "@/src/lib/supabase"; 
+import { useToast } from "@/src/components/general/Toast"; 
 import DateTimePickerModal from "react-native-modal-datetime-picker";
 import { format, parseISO, isValid, startOfDay } from "date-fns";
 import {
@@ -22,9 +23,10 @@ import {
   AlertCircle,
   Sun,
   Info,
+  ChevronDown,
 } from "lucide-react-native";
 
-import type { Database } from "@/src/lib/database.types"; // Adjust path as needed
+import type { Database } from "@/src/lib/database.types"; 
 
 // --- Constants ---
 const DaysOfWeek = [
@@ -109,7 +111,17 @@ const BarOperatingHours = ({ barId }: BarOperatingHoursProps): JSX.Element => {
   // Store original fetched data separately for revert functionality
   const [originalHoursData, setOriginalHoursData] = useState<OperatingHourRow[] | null>(null);
   const [originalExceptionsData, setOriginalExceptionsData] = useState<ExceptionRow[] | null>(null);
+  const [isExpanded, setIsExpanded] = useState(false);
+  const toggleExpansion = () => setIsExpanded((prev) => !prev);
 
+  // Chevron animation with Reanimated
+  const arrowRotation = useSharedValue(0);
+  useEffect(() => {
+    arrowRotation.value = withTiming(isExpanded ? 180 : 0, { duration: 200 });
+  }, [isExpanded]);
+  const chevronAnimatedStyle = useAnimatedStyle(() => ({
+    transform: [{ rotate: `${arrowRotation.value}deg` }],
+  }));
   const {
     data: hoursData,
     isPending: isHoursPending,
@@ -199,8 +211,6 @@ const BarOperatingHours = ({ barId }: BarOperatingHoursProps): JSX.Element => {
       setLocalExceptions([]);
     }
   }, [exceptionsData, originalExceptionsData]); // Depend on fetched and stored original data
-
-// Remove: Do not reset hasChanges/toDeleteExceptions based on query data, only on mutation success
 
 
   // --- Mutations ---
@@ -490,14 +500,29 @@ const BarOperatingHours = ({ barId }: BarOperatingHoursProps): JSX.Element => {
 
   // Main component structure using NativeWind classes
   return (
-    <View className="flex-1 bg-white rounded-xl shadow-sm m-4 p-5">
+    <View className="flex-1 bg-white rounded-xl shadow-sm m-2">
       {/* Header */}
-      <View className="pb-3 mb-4 border-b border-gray-200">
-        <Text className="text-xl font-bold text-gray-800">Operating Hours</Text>
-        <Text className="text-sm text-gray-500 mt-1">Manage when your bar is open for customers.</Text>
-      </View>
+      <TouchableOpacity
+          activeOpacity={0.8}
+          onPress={toggleExpansion}
+          className={`p-3 flex-row justify-between items-center`}
+          accessibilityRole="button"
+          accessibilityState={{ expanded: isExpanded }}
+          accessibilityLabel="Bar Information Section"
+          accessibilityHint={isExpanded ? "Tap to collapse" : "Tap to expand"}
+        >
+         <View>
+                 <Text className="text-xl font-bold text-gray-800">Operating Hours</Text>
+                 <Text className="text-sm text-gray-500 mt-1">Manage when your bar is open for customers.</Text>
+               </View>
+          <Animated.View style={chevronAnimatedStyle}>
+            <ChevronDown size={18} color={isExpanded ? '#4f46e5' : '#6b7280'} />
+          </Animated.View>
+        </TouchableOpacity>
 
       {/* Tab Navigation */}
+      {isExpanded && (
+         <>
       <View className="flex-row mb-4 border-b border-gray-200">
         <TouchableOpacity
           className={`py-2 px-4 mr-2 border-b-2 ${activeTab === "regular" ? "border-blue-500" : "border-transparent"}`}
@@ -745,7 +770,10 @@ const BarOperatingHours = ({ barId }: BarOperatingHoursProps): JSX.Element => {
         onCancel={hideDatePicker}
         minimumDate={new Date()}
       />
+         </>
+    )}
     </View>
+    
   );
 };
 

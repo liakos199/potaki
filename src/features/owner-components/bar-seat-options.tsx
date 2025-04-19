@@ -1,7 +1,16 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { View, Text, TouchableOpacity, TextInput, ActivityIndicator, Switch, ScrollView } from "react-native"
+import { 
+  View, 
+  Text, 
+  TouchableOpacity, 
+  TextInput, 
+  ActivityIndicator, 
+  Switch, 
+  ScrollView 
+} from "react-native"
+import Animated, { useSharedValue, useAnimatedStyle, withTiming } from 'react-native-reanimated';
 import { ChevronDown, ChevronUp, Save, AlertCircle, Edit2,RotateCcw } from "lucide-react-native"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { supabase } from "../../lib/supabase"
@@ -49,6 +58,17 @@ export const BarSeatOptions = ({ barId, onChange }: BarSeatOptionsProps): JSX.El
   const queryClient = useQueryClient()
   const toast = useToast()
   const [editingType, setEditingType] = useState<SeatOptionType | null>(null)
+  const [isExpanded, setIsExpanded] = useState(false);
+  const toggleExpansion = () => setIsExpanded((prev) => !prev);
+
+  // Chevron animation with Reanimated
+  const arrowRotation = useSharedValue(0);
+  useEffect(() => {
+    arrowRotation.value = withTiming(isExpanded ? 180 : 0, { duration: 200 });
+  }, [isExpanded]);
+  const chevronAnimatedStyle = useAnimatedStyle(() => ({
+    transform: [{ rotate: `${arrowRotation.value}deg` }],
+  }));
 
   // State to track local changes before saving
   const [localSeatOptions, setLocalSeatOptions] = useState<Record<SeatOptionType, LocalSeatOption | null>>(
@@ -544,27 +564,37 @@ export const BarSeatOptions = ({ barId, onChange }: BarSeatOptionsProps): JSX.El
 
   // --- Main Render ---
   return (
-    <View className="flex-1 bg-slate-50 rounded-xl overflow-hidden">
+    <View className="flex-1 bg-white rounded-xl shadow-sm m-2">
       {/* Header */}
-      <View className="p-4 bg-white border-b border-slate-200 flex-row justify-between items-center">
-        <View>
-          <Text className="text-xl font-bold text-slate-900">Seat Options</Text>
-          <Text className="text-sm text-slate-500 mt-1">Configure available seating options for your bar</Text>
-        </View>
-
-         
-      </View>
+      <TouchableOpacity
+                          activeOpacity={0.8}
+                          onPress={toggleExpansion}
+                          className={`p-3 flex-row justify-between items-center`}
+                          accessibilityRole="button"
+                          accessibilityState={{ expanded: isExpanded }}
+                          accessibilityLabel="Bar Information Section"
+                          accessibilityHint={isExpanded ? "Tap to collapse" : "Tap to expand"}
+                        >
+                         <View>
+                                 <Text className="text-xl font-bold text-gray-800">Seat Options</Text>
+                                 <Text className="text-sm text-gray-500 mt-1">Manage available seating options for your bar.</Text>
+                               </View>
+                          <Animated.View style={chevronAnimatedStyle}>
+                            <ChevronDown size={18} color={isExpanded ? '#4f46e5' : '#6b7280'} />
+                          </Animated.View>
+                        </TouchableOpacity>
 
       {/* Content */}
-      <ScrollView className="flex-1 p-3">
-        {isLoading ? (
-          <View className="items-center justify-center py-10">
-            <ActivityIndicator size="large" color="#0891b2" />
-            <Text className="mt-3 text-sm text-slate-500">Loading seat options...</Text>
-          </View>
-        ) : error ? (
-          <View className="bg-red-50 p-6 rounded-lg m-3 items-center">
-            <AlertCircle size={24} color="#ef4444" />
+      {isExpanded && (
+        <ScrollView className="flex-1 p-3">
+          {isLoading ? (
+            <View className="items-center justify-center py-10">
+              <ActivityIndicator size="large" color="#0891b2" />
+              <Text className="mt-3 text-sm text-slate-500">Loading seat options...</Text>
+            </View>
+          ) : error ? (
+            <View className="bg-red-50 p-6 rounded-lg m-3 items-center">
+              <AlertCircle size={24} color="#ef4444" />
             <Text className="mt-3 text-sm text-red-700 text-center">
               {error instanceof Error ? error.message : "Failed to load seat options"}
             </Text>
@@ -582,7 +612,7 @@ export const BarSeatOptions = ({ barId, onChange }: BarSeatOptionsProps): JSX.El
           </>
         )}
       </ScrollView>
-
+)}
       {/* Save/Cancel Action Bar */}
       {hasPendingChanges() && (
         <View className="flex-row justify-end p-3 bg-white border-t border-slate-200">
