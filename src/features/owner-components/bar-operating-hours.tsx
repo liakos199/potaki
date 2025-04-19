@@ -5,8 +5,7 @@ import {
   ActivityIndicator,
   TouchableOpacity,
   ScrollView,
-  Switch, // Use from react-native
-  Platform,
+  Switch,
 } from "react-native";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/src/lib/supabase"; // Adjust path as needed
