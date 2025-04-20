@@ -4,7 +4,7 @@ import { useLocalSearchParams } from 'expo-router';
 
 
 import BarInfoSection from '@/src/features/owner-components/bar-info-section'; 
-import BarOperatingHours from '@/src/features/owner-components/bar-operating-hours'; 
+import BarOperatingHours from '@/src/features/owner-components/operating-hours/bar-operating-hours'; 
 import { BarSeatOptions } from '@/src/features/owner-components/bar-seat-options'; 
 
 

@@ -1,4 +1,4 @@
-import { View, Text, TouchableOpacity, ActivityIndicator } from 'react-native';
+import { View, Text, TouchableOpacity, ActivityIndicator, Modal } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
 import { useAuthStore } from '@/src/features/auth/store/auth-store';
@@ -13,8 +13,23 @@ const BarOptionsScreen = (): JSX.Element | null => {
   const profile = useAuthStore((s) => s.profile);
   const toast = useToast();
   const [isDeleting, setIsDeleting] = React.useState(false);
-  const handleDelete = async () => {
-   
+  const [deleteModalVisible, setDeleteModalVisible] = React.useState(false);
+
+  // Delete handler (strict typing, best practices)
+  const handleDelete = async (): Promise<void> => {
+    setIsDeleting(true);
+    try {
+      const { error } = await supabase.from('bars').delete().eq('id', barId);
+      if (error) throw error;
+      setDeleteModalVisible(false);
+      toast.show({ type: 'success', text1: 'Bar deleted successfully' });
+      router.replace('/(admin)/admin-panel');
+    } catch (err: unknown) {
+      const errorMsg = err instanceof Error ? err.message : 'An error occurred';
+      toast.show({ type: 'error', text1: 'Delete failed', text2: errorMsg });
+    } finally {
+      setIsDeleting(false);
+    }
   };
   // Fetch bar details
   const {
@@ -72,13 +87,22 @@ const BarOptionsScreen = (): JSX.Element | null => {
       </View>
       <View className="gap-4">
         <TouchableOpacity
-          className="bg-indigo-600 px-6 py-4 rounded-lg items-center"
+          className="bg-green-600 px-6 py-4 rounded-lg items-center"
           accessibilityRole="button"
           accessibilityLabel="Edit Bar Info"
           activeOpacity={0.85}
           onPress={() => router.push(`/(admin)/bar/${barId}/edit`)}
         >
           <Text className="text-white font-medium">Manage Bar Information</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          className="bg-green-600 px-6 py-4 rounded-lg items-center"
+          accessibilityRole="button"
+          accessibilityLabel="Drinks"
+          activeOpacity={0.85}
+          onPress={() => router.push(`/(admin)/bar/${barId}/drinks`)}
+        >
+          <Text className="text-white font-medium">Manage Bar Drinks</Text>
         </TouchableOpacity>
         <TouchableOpacity
           className="bg-gray-100 px-6 py-4 rounded-lg items-center"
@@ -89,15 +113,7 @@ const BarOptionsScreen = (): JSX.Element | null => {
         >
           <Text className="text-gray-800 font-medium">Manage Bar Reservations</Text>
         </TouchableOpacity>
-        <TouchableOpacity
-          className="bg-gray-100 px-6 py-4 rounded-lg items-center"
-          accessibilityRole="button"
-          accessibilityLabel="Drinks"
-          activeOpacity={0.85}
-          onPress={() => router.push(`/(admin)/bar/${barId}/drinks`)}
-        >
-          <Text className="text-gray-800 font-medium">Manage Bar Drinks</Text>
-        </TouchableOpacity>
+        
         <TouchableOpacity
           className="bg-gray-100 px-6 py-4 rounded-lg items-center"
           accessibilityRole="button"
@@ -107,18 +123,60 @@ const BarOptionsScreen = (): JSX.Element | null => {
         >
           <Text className="text-gray-800 font-medium">Manage Bar Staff</Text>
         </TouchableOpacity>
+        {/* Delete Bar Button */}
         <TouchableOpacity
           className="bg-red-600 px-6 py-4 rounded-lg items-center"
           accessibilityRole="button"
           accessibilityLabel="Delete Bar"
           activeOpacity={0.85}
-          onPress={() => handleDelete()}
+          onPress={() => setDeleteModalVisible(true)}
+          disabled={isDeleting}
         >
-          <Text className="text-white font-medium">Delete Bar</Text>
+          <Text className="text-white font-medium">{isDeleting ? 'Deleting...' : 'Delete Bar'}</Text>
         </TouchableOpacity>
+
+        {/* Delete Confirmation Modal */}
+        {deleteModalVisible && (
+          <Modal
+            visible={deleteModalVisible}
+            animationType="fade"
+            transparent
+            onRequestClose={() => setDeleteModalVisible(false)}
+          >
+            <View className="flex-1 justify-center items-center bg-black/40 px-6">
+              <View className="bg-white rounded-xl p-6 w-full max-w-md shadow-lg">
+                <Text className="text-lg font-semibold text-gray-900 mb-2 text-center">Delete Bar?</Text>
+                <Text className="text-gray-700 text-center mb-4">
+                  This action cannot be undone. Are you sure you want to permanently delete this bar and all its data?
+                </Text>
+                <View className="flex-row justify-end space-x-3 mt-2">
+                  <TouchableOpacity
+                    className="px-4 py-2 rounded-md bg-gray-100"
+                    onPress={() => setDeleteModalVisible(false)}
+                    accessibilityRole="button"
+                    accessibilityLabel="Cancel Delete"
+                  >
+                    <Text className="text-gray-700 font-medium">Cancel</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    className={`px-4 py-2 rounded-md bg-red-600 ${isDeleting ? 'opacity-60' : ''}`}
+                    onPress={handleDelete}
+                    accessibilityRole="button"
+                    accessibilityLabel="Confirm Delete"
+                    disabled={isDeleting}
+                  >
+                    <Text className="text-white font-medium">{isDeleting ? 'Deleting...' : 'Delete'}</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </View>
+          </Modal>
+        )}
       </View>
     </View>
   );
 };
+
+
 
 export default BarOptionsScreen;
