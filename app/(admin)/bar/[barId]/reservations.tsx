@@ -1,1003 +1,655 @@
 import React, { useState, useMemo, useCallback } from 'react';
-import { 
-  View, 
-  Text, 
-  TouchableOpacity, 
-  ActivityIndicator, 
-  ScrollView, 
-  Alert,
-  FlatList,
-  StyleSheet,
-  SafeAreaView,
+import {
+    View,
+    Text,
+    TouchableOpacity,
+    ActivityIndicator,
+    ScrollView,
+    Alert,
+    FlatList,
+    SafeAreaView,
+    RefreshControl,
 } from 'react-native';
-import { 
-  Calendar, 
-  Users, 
-  CheckCircle, 
-  XCircle, 
-  AlertCircle, 
-  Info,
-  Filter,
-  Plus,
+import {
+    Calendar,
+    Users,
+    CheckCircle,
+    XCircle,
+    AlertCircle,
+    Info,
+    Filter,
+    Utensils,
+    ChevronDown,
+    ChevronUp,
+    MessageSquare,
+    GlassWater,
 } from 'lucide-react-native';
-import { format, parseISO, isToday, isAfter, isBefore} from 'date-fns';
+import { format, parseISO, isToday, isAfter, isBefore, startOfDay } from 'date-fns';
 import { useLocalSearchParams } from 'expo-router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/src/lib/supabase';
 import { useAuthStore } from '@/src/features/auth/store/auth-store';
 import { useToast } from '@/src/components/general/Toast';
 import type { Database } from '@/src/lib/database.types';
-import { CreateReservationModal } from '@/src/features/owner-components/CreateReservationModal';
+// Removed styled and clsx imports
 
-// Type definitions
+// --- Type Definitions ---
 type Reservation = Database['public']['Tables']['reservations']['Row'] & {
-  customer: {
-    id: string;
-    name: string | null;
-    email: string | null;
-  };
-  drinks?: ReservationDrink[];
+    customer: {
+        id: string;
+        name: string | null;
+        email: string | null;
+    };
 };
 
 type ReservationDrink = Database['public']['Tables']['reservation_drinks']['Row'];
-
-type DrinkOption = Database['public']['Tables']['drink_options']['Row'];
-
 type ReservationStatus = Database['public']['Enums']['reservation_status'];
 type SeatType = Database['public']['Enums']['seat_option_type'];
-type DrinkOptionType = Database['public']['Enums']['drink_option_type'];
-type SeatOption = Database['public']['Tables']['seat_options']['Row'];
 
-// Constants
-const STATUS_COLORS = {
-  confirmed: {
-    bg: '#dcfce7', // Green 100
-    text: '#15803d', // Green 700
-  },
-  cancelled: {
-    bg: '#fee2e2', // Red 100
-    text: '#b91c1c', // Red 700
-  },
-  completed: {
-    bg: '#dbeafe', // Blue 100
-    text: '#1d4ed8', // Blue 700
-  },
-  no_show: {
-    bg: '#fef3c7', // Yellow 100
-    text: '#b45309', // Yellow 700
-  },
+// --- Constants ---
+const STATUS_STYLES: Record<
+    ReservationStatus,
+    { bg: string; text: string; border: string }
+> = {
+    confirmed: {
+        bg: 'bg-green-100',
+        text: 'text-green-800',
+        border: 'border-green-300',
+    },
+    cancelled: {
+        bg: 'bg-red-100',
+        text: 'text-red-800',
+        border: 'border-red-300',
+    },
+    completed: {
+        bg: 'bg-blue-100',
+        text: 'text-blue-800',
+        border: 'border-blue-300',
+    },
+    no_show: {
+        bg: 'bg-yellow-100',
+        text: 'text-yellow-800',
+        border: 'border-yellow-300',
+    },
 };
 
-const SEAT_TYPE_LABELS = {
-  bar: 'Bar',
-  table: 'Table',
-  vip: 'VIP',
+const SEAT_TYPE_LABELS: Record<SeatType, string> = {
+    bar: 'Bar',
+    table: 'Table',
+    vip: 'VIP',
 };
 
-// Main component
-export default function ReservationsScreen() {
-  const { barId } = useLocalSearchParams<{ barId: string }>();
-  const profile = useAuthStore((s) => s.profile);
-  const toast = useToast();
-  const queryClient = useQueryClient();
-  
-  // State for filtering
-  const [statusFilter, setStatusFilter] = useState<ReservationStatus | 'all'>('all');
-  const [dateFilter, setDateFilter] = useState<'today' | 'upcoming' | 'past' | 'all'>('upcoming');
-  const [selectedReservation, setSelectedReservation] = useState<string | null>(null);
-  const [isCreateModalVisible, setIsCreateModalVisible] = useState(false);
-  
-  // Fetch reservations
-  const { 
-    data: reservations, 
-    isLoading: isLoadingReservations,
-    error: reservationsError,
-    refetch: refetchReservations
-  } = useQuery({
-    queryKey: ['reservations', barId],
-    queryFn: async () => {
-      if (!barId) throw new Error('Bar ID is required');
-      
-      const { data, error } = await supabase
-        .from('reservations')
-        .select(`
-          *,
-          customer:profiles!reservations_customer_id_fkey(id, name, email)
-        `)
-        .eq('bar_id', barId)
-        .order('reservation_date', { ascending: true });
-      
-      if (error) throw error;
-      return data as Reservation[];
-    },
-    enabled: !!barId && !!profile,
-  });
-  
-  // Fetch reservation drinks when a reservation is selected
-  const {
-    data: reservationDrinks,
-    isLoading: isLoadingDrinks,
-  } = useQuery({
-    queryKey: ['reservation_drinks', selectedReservation],
-    queryFn: async () => {
-      if (!selectedReservation) return [];
-      
-      const { data, error } = await supabase
-        .from('reservation_drinks')
-        .select('*')
-        .eq('reservation_id', selectedReservation);
-      
-      if (error) throw error;
-      return data as ReservationDrink[];
-    },
-    enabled: !!selectedReservation,
-  });
-  
-  // Fetch seat options for the bar
-  const {
-    data: seatOptions,
-    isLoading: isLoadingSeatOptions,
-  } = useQuery({
-    queryKey: ['seat_options', barId],
-    queryFn: async () => {
-      if (!barId) return [];
-      
-      const { data, error } = await supabase
-        .from('seat_options')
-        .select('*')
-        .eq('bar_id', barId)
-        .eq('enabled', true);
-      
-      if (error) throw error;
-      return data as SeatOption[];
-    },
-    enabled: !!barId,
-  });
-  
-  // Update reservation status mutation
-  const updateReservationStatus = useMutation({
-    mutationFn: async ({ 
-      reservationId, 
-      status, 
-      checkedInAt = null 
-    }: { 
-      reservationId: string; 
-      status: ReservationStatus; 
-      checkedInAt?: string | null;
-    }) => {
-      const { error } = await supabase
-        .from('reservations')
-        .update({ 
-          status, 
-          ...(checkedInAt ? { checked_in_at: checkedInAt } : {})
-        })
-        .eq('id', reservationId);
-      
-      if (error) throw error;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['reservations', barId] });
-      toast.show({ type: 'success', text1: 'Reservation updated successfully' });
-    },
-    onError: (error) => {
-      toast.show({ 
-        type: 'error', 
-        text1: 'Failed to update reservation', 
-        text2: error instanceof Error ? error.message : 'Unknown error' 
-      });
-    },
-  });
-  
-  // Create reservation mutation
-  const createReservation = useMutation({
-    mutationFn: async (newReservation: {
-      customer_id: string;
-      party_size: number;
-      reservation_date: string;
-      seat_type: SeatType;
-      special_requests?: string;
-    }) => {
-      if (!barId) throw new Error('Bar ID is required');
-      
-      const { data, error } = await supabase
-        .from('reservations')
-        .insert({
-          ...newReservation,
-          bar_id: barId,
-          status: 'confirmed' as ReservationStatus,
-        })
-        .select();
-      
-      if (error) throw error;
-      return data;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['reservations', barId] });
-      toast.show({ type: 'success', text1: 'Reservation created successfully' });
-      setIsCreateModalVisible(false);
-    },
-    onError: (error) => {
-      toast.show({ 
-        type: 'error', 
-        text1: 'Failed to create reservation', 
-        text2: error instanceof Error ? error.message : 'Unknown error' 
-      });
-    },
-  });
-  
-  // Filter reservations
-  const filteredReservations = useMemo(() => {
-    if (!reservations) return [];
-    
-    return reservations.filter(reservation => {
-      const reservationDate = parseISO(reservation.reservation_date);
-      const today = new Date();
-      
-      // Status filter
-      if (statusFilter !== 'all' && reservation.status !== statusFilter) {
-        return false;
-      }
-      
-      // Date filter
-      if (dateFilter === 'today' && !isToday(reservationDate)) {
-        return false;
-      } else if (dateFilter === 'upcoming' && !isAfter(reservationDate, today)) {
-        return false;
-      } else if (dateFilter === 'past' && !isBefore(reservationDate, today)) {
-        return false;
-      }
-      
-      return true;
-    });
-  }, [reservations, statusFilter, dateFilter]);
-  
-  // Handle check-in
-  const handleCheckIn = (reservation: Reservation) => {
-    if (reservation.status === 'completed') {
-      toast.show({ 
-        type: 'info', 
-        text1: 'Already checked in', 
-        text2: 'This reservation is already marked as completed.' 
-      });
-      return;
-    }
-    
-    if (reservation.status === 'cancelled') {
-      Alert.alert(
-        'Reservation Cancelled',
-        'This reservation was cancelled. Do you want to mark it as completed anyway?',
-        [
-          { text: 'No', style: 'cancel' },
-          { 
-            text: 'Yes', 
-            onPress: () => updateReservationStatus.mutate({ 
-              reservationId: reservation.id, 
-              status: 'completed',
-              checkedInAt: new Date().toISOString()
-            })
-          }
-        ]
-      );
-      return;
-    }
-    
-    updateReservationStatus.mutate({ 
-      reservationId: reservation.id, 
-      status: 'completed',
-      checkedInAt: new Date().toISOString()
-    });
-  };
-  
-  // Handle mark as no-show
-  const handleNoShow = (reservation: Reservation) => {
-    if (reservation.status === 'no_show') {
-      toast.show({ 
-        type: 'info', 
-        text1: 'Already marked as no-show', 
-        text2: 'This reservation is already marked as no-show.' 
-      });
-      return;
-    }
-    
-    Alert.alert(
-      'Mark as No-Show',
-      'Are you sure you want to mark this reservation as no-show?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { 
-          text: 'Mark as No-Show', 
-          style: 'destructive',
-          onPress: () => updateReservationStatus.mutate({ 
-            reservationId: reservation.id, 
-            status: 'no_show' 
-          })
-        }
-      ]
-    );
-  };
-  
-  // Handle cancel reservation
-  const handleCancel = (reservation: Reservation) => {
-    if (reservation.status === 'cancelled') {
-      toast.show({ 
-        type: 'info', 
-        text1: 'Already cancelled', 
-        text2: 'This reservation is already cancelled.' 
-      });
-      return;
-    }
-    
-    Alert.alert(
-      'Cancel Reservation',
-      'Are you sure you want to cancel this reservation?',
-      [
-        { text: 'No', style: 'cancel' },
-        { 
-          text: 'Yes, Cancel', 
-          style: 'destructive',
-          onPress: () => updateReservationStatus.mutate({ 
-            reservationId: reservation.id, 
-            status: 'cancelled' 
-          })
-        }
-      ]
-    );
-  };
-  
-  // Handle view details
-  const handleViewDetails = (reservationId: string) => {
-    setSelectedReservation(prevId => prevId === reservationId ? null : reservationId);
-  };
-  
-  // Render reservation item
-  const renderReservationItem = ({ item }: { item: Reservation }) => {
-    const isExpanded = selectedReservation === item.id;
-    const reservationDate = parseISO(item.reservation_date);
-    const statusColor = STATUS_COLORS[item.status as keyof typeof STATUS_COLORS];
-    
-    return (
-      <View style={styles.reservationCard}>
-        <TouchableOpacity 
-          style={styles.reservationHeader}
-          onPress={() => handleViewDetails(item.id)}
-        >
-          <View style={styles.reservationInfo}>
-            <View style={styles.dateTimeContainer}>
-              <Calendar size={16} color="#4b5563" style={styles.icon} />
-              <Text style={styles.dateTimeText}>
-                {format(reservationDate, 'MMM d, yyyy')} at {format(reservationDate, 'h:mm a')}
-              </Text>
-            </View>
-            
-            <View style={styles.customerContainer}>
-              <Users size={16} color="#4b5563" style={styles.icon} />
-              <Text style={styles.customerText}>
-                {item.customer.name || 'Unnamed Customer'} · {item.party_size} {item.party_size === 1 ? 'person' : 'people'}
-              </Text>
-            </View>
-            
-            <View style={styles.detailsRow}>
-              <View style={[styles.statusBadge, { backgroundColor: statusColor.bg }]}>
-                <Text style={[styles.statusText, { color: statusColor.text }]}>
-                  {item.status.charAt(0).toUpperCase() + item.status.slice(1)}
-                </Text>
-              </View>
-              
-              <View style={styles.seatTypeBadge}>
-                <Text style={styles.seatTypeText}>
-                  {SEAT_TYPE_LABELS[item.seat_type as keyof typeof SEAT_TYPE_LABELS]}
-                </Text>
-              </View>
-            </View>
-          </View>
-          
-          <View style={styles.expandIconContainer}>
-            <Info size={20} color="#6b7280" />
-          </View>
-        </TouchableOpacity>
-        
-        {isExpanded && (
-          <View style={styles.expandedContent}>
-            {item.special_requests && (
-              <View style={styles.specialRequestsContainer}>
-                <Text style={styles.sectionTitle}>Special Requests:</Text>
-                <Text style={styles.specialRequestsText}>{item.special_requests}</Text>
-              </View>
-            )}
-            
-            {isLoadingDrinks ? (
-              <ActivityIndicator size="small" color="#4f46e5" style={styles.loadingIndicator} />
-            ) : reservationDrinks && reservationDrinks.length > 0 ? (
-              <View style={styles.drinksContainer}>
-                <Text style={styles.sectionTitle}>Pre-ordered Drinks:</Text>
-                {reservationDrinks.map((drink) => (
-                  <View key={drink.id} style={styles.drinkItem}>
-                    <Text style={styles.drinkName}>
-                      {drink.quantity}x {drink.drink_name_at_booking}
-                    </Text>
-                    <Text style={styles.drinkPrice}>
-                      ${(drink.price_at_booking * drink.quantity).toFixed(2)}
-                    </Text>
-                  </View>
-                ))}
-                <View style={styles.drinkTotalContainer}>
-                  <Text style={styles.drinkTotalText}>
-                    Total: ${reservationDrinks.reduce((total, drink) => 
-                      total + (drink.price_at_booking * drink.quantity), 0).toFixed(2)}
-                  </Text>
-                </View>
-              </View>
-            ) : (
-              <Text style={styles.noDrinksText}>No drinks pre-ordered</Text>
-            )}
-            
-            <View style={styles.actionButtonsContainer}>
-              {item.status !== 'completed' && (
-                <TouchableOpacity 
-                  style={[styles.actionButton, styles.checkInButton]}
-                  onPress={() => handleCheckIn(item)}
-                  disabled={updateReservationStatus.isPending}
-                >
-                  <CheckCircle size={16} color="#15803d" style={styles.actionIcon} />
-                  <Text style={styles.checkInButtonText}>Check In</Text>
-                </TouchableOpacity>
-              )}
-              
-              {item.status !== 'no_show' && item.status !== 'cancelled' && (
-                <TouchableOpacity 
-                  style={[styles.actionButton, styles.noShowButton]}
-                  onPress={() => handleNoShow(item)}
-                  disabled={updateReservationStatus.isPending}
-                >
-                  <XCircle size={16} color="#b45309" style={styles.actionIcon} />
-                  <Text style={styles.noShowButtonText}>No Show</Text>
-                </TouchableOpacity>
-              )}
-              
-              {item.status !== 'cancelled' && (
-                <TouchableOpacity 
-                  style={[styles.actionButton, styles.cancelButton]}
-                  onPress={() => handleCancel(item)}
-                  disabled={updateReservationStatus.isPending}
-                >
-                  <XCircle size={16} color="#b91c1c" style={styles.actionIcon} />
-                  <Text style={styles.cancelButtonText}>Cancel</Text>
-                </TouchableOpacity>
-              )}
-            </View>
-          </View>
-        )}
-      </View>
-    );
-  };
-  
-  // Render filter section
-  const renderFilterSection = () => (
-    <View style={styles.filterContainer}>
-      <Text style={styles.filterTitle}>
-        <Filter size={16} color="#4b5563" /> Filters
-      </Text>
-      
-      <ScrollView 
-        horizontal 
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.filterScrollContent}
-      >
-        <View style={styles.filterGroup}>
-          <Text style={styles.filterGroupLabel}>Status:</Text>
-          <View style={styles.filterButtonsRow}>
-            <TouchableOpacity
-              style={[
-                styles.filterButton,
-                statusFilter === 'all' && styles.filterButtonActive
-              ]}
-              onPress={() => setStatusFilter('all')}
-            >
-              <Text style={[
-                styles.filterButtonText,
-                statusFilter === 'all' && styles.filterButtonTextActive
-              ]}>All</Text>
-            </TouchableOpacity>
-            
-            <TouchableOpacity
-              style={[
-                styles.filterButton,
-                statusFilter === 'confirmed' && styles.filterButtonActive
-              ]}
-              onPress={() => setStatusFilter('confirmed')}
-            >
-              <Text style={[
-                styles.filterButtonText,
-                statusFilter === 'confirmed' && styles.filterButtonTextActive
-              ]}>Confirmed</Text>
-            </TouchableOpacity>
-            
-            <TouchableOpacity
-              style={[
-                styles.filterButton,
-                statusFilter === 'completed' && styles.filterButtonActive
-              ]}
-              onPress={() => setStatusFilter('completed')}
-            >
-              <Text style={[
-                styles.filterButtonText,
-                statusFilter === 'completed' && styles.filterButtonTextActive
-              ]}>Completed</Text>
-            </TouchableOpacity>
-            
-            <TouchableOpacity
-              style={[
-                styles.filterButton,
-                statusFilter === 'cancelled' && styles.filterButtonActive
-              ]}
-              onPress={() => setStatusFilter('cancelled')}
-            >
-              <Text style={[
-                styles.filterButtonText,
-                statusFilter === 'cancelled' && styles.filterButtonTextActive
-              ]}>Cancelled</Text>
-            </TouchableOpacity>
-            
-            <TouchableOpacity
-              style={[
-                styles.filterButton,
-                statusFilter === 'no_show' && styles.filterButtonActive
-              ]}
-              onPress={() => setStatusFilter('no_show')}
-            >
-              <Text style={[
-                styles.filterButtonText,
-                statusFilter === 'no_show' && styles.filterButtonTextActive
-              ]}>No Show</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-        
-        <View style={styles.filterDivider} />
-        
-        <View style={styles.filterGroup}>
-          <Text style={styles.filterGroupLabel}>Date:</Text>
-          <View style={styles.filterButtonsRow}>
-            <TouchableOpacity
-              style={[
-                styles.filterButton,
-                dateFilter === 'all' && styles.filterButtonActive
-              ]}
-              onPress={() => setDateFilter('all')}
-            >
-              <Text style={[
-                styles.filterButtonText,
-                dateFilter === 'all' && styles.filterButtonTextActive
-              ]}>All</Text>
-            </TouchableOpacity>
-            
-            <TouchableOpacity
-              style={[
-                styles.filterButton,
-                dateFilter === 'today' && styles.filterButtonActive
-              ]}
-              onPress={() => setDateFilter('today')}
-            >
-              <Text style={[
-                styles.filterButtonText,
-                dateFilter === 'today' && styles.filterButtonTextActive
-              ]}>Today</Text>
-            </TouchableOpacity>
-            
-            <TouchableOpacity
-              style={[
-                styles.filterButton,
-                dateFilter === 'upcoming' && styles.filterButtonActive
-              ]}
-              onPress={() => setDateFilter('upcoming')}
-            >
-              <Text style={[
-                styles.filterButtonText,
-                dateFilter === 'upcoming' && styles.filterButtonTextActive
-              ]}>Upcoming</Text>
-            </TouchableOpacity>
-            
-            <TouchableOpacity
-              style={[
-                styles.filterButton,
-                dateFilter === 'past' && styles.filterButtonActive
-              ]}
-              onPress={() => setDateFilter('past')}
-            >
-              <Text style={[
-                styles.filterButtonText,
-                dateFilter === 'past' && styles.filterButtonTextActive
-              ]}>Past</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </ScrollView>
-    </View>
-  );
-  
-  // Render loading state
-  if (isLoadingReservations) {
-    return (
-      <SafeAreaView style={styles.container}>
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#4f46e5" />
-          <Text style={styles.loadingText}>Loading reservations...</Text>
-        </View>
-      </SafeAreaView>
-    );
-  }
-  
-  // Render error state
-  if (reservationsError) {
-    return (
-      <SafeAreaView style={styles.container}>
-        <View style={styles.errorContainer}>
-          <AlertCircle size={48} color="#ef4444" />
-          <Text style={styles.errorTitle}>Failed to load reservations</Text>
-          <Text style={styles.errorMessage}>
-            {reservationsError instanceof Error 
-              ? reservationsError.message 
-              : 'An unknown error occurred'}
-          </Text>
-          <TouchableOpacity 
-            style={styles.retryButton}
-            onPress={() => refetchReservations()}
-          >
-            <Text style={styles.retryButtonText}>Retry</Text>
-          </TouchableOpacity>
-        </View>
-      </SafeAreaView>
-    );
-  }
-  
-  return (
-    <SafeAreaView style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>Reservations</Text>
-        <TouchableOpacity 
-          style={styles.createButton}
-          onPress={() => setIsCreateModalVisible(true)}
-        >
-          <Plus size={18} color="#ffffff" />
-          <Text style={styles.createButtonText}>New Reservation</Text>
-        </TouchableOpacity>
-      </View>
-      
-      {renderFilterSection()}
-      
-      {filteredReservations.length === 0 ? (
-        <View style={styles.emptyContainer}>
-          <Calendar size={48} color="#9ca3af" />
-          <Text style={styles.emptyTitle}>No reservations found</Text>
-          <Text style={styles.emptyMessage}>
-            {statusFilter !== 'all' || dateFilter !== 'all'
-              ? 'Try changing your filters to see more reservations.'
-              : 'There are no reservations for this bar yet.'}
-          </Text>
-        </View>
-      ) : (
-        <FlatList
-          data={filteredReservations}
-          renderItem={renderReservationItem}
-          keyExtractor={(item) => item.id}
-          contentContainerStyle={styles.listContent}
-          showsVerticalScrollIndicator={false}
-        />
-      )}
-      
-      <CreateReservationModal
-        isVisible={isCreateModalVisible}
-        onClose={() => setIsCreateModalVisible(false)}
-        seatOptions={seatOptions || []}
-        isLoading={isLoadingSeatOptions || createReservation.isPending}
-        onCreate={createReservation.mutate}
-        barId={barId}
-      />
-    </SafeAreaView>
-  );
+const ICON_SIZE = 16;
+const ICON_COLOR = 'text-gray-600';
+
+// --- Reusable UI Components ---
+
+interface FilterButtonProps {
+    label: string;
+    isActive: boolean;
+    onPress: () => void;
 }
 
-// Styles
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#f9fafb',
-  },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 16,
-    backgroundColor: '#ffffff',
-    borderBottomWidth: 1,
-    borderBottomColor: '#e5e7eb',
-  },
-  headerTitle: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#1f2937',
-  },
-  createButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#4f46e5',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 8,
-  },
-  createButtonText: {
-    color: '#ffffff',
-    fontWeight: '600',
-    marginLeft: 6,
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 16,
-  },
-  loadingText: {
-    marginTop: 12,
-    fontSize: 16,
-    color: '#4b5563',
-  },
-  errorContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 16,
-  },
-  errorTitle: {
-    marginTop: 16,
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#1f2937',
-  },
-  errorMessage: {
-    marginTop: 8,
-    fontSize: 14,
-    color: '#6b7280',
-    textAlign: 'center',
-  },
-  retryButton: {
-    marginTop: 16,
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    backgroundColor: '#4f46e5',
-    borderRadius: 8,
-  },
-  retryButtonText: {
-    color: '#ffffff',
-    fontWeight: '600',
-  },
-  emptyContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 16,
-  },
-  emptyTitle: {
-    marginTop: 16,
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#1f2937',
-  },
-  emptyMessage: {
-    marginTop: 8,
-    fontSize: 14,
-    color: '#6b7280',
-    textAlign: 'center',
-    maxWidth: 300,
-  },
-  filterContainer: {
-    padding: 16,
-    backgroundColor: '#ffffff',
-    borderBottomWidth: 1,
-    borderBottomColor: '#e5e7eb',
-  },
-  filterTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#4b5563',
-    marginBottom: 12,
-  },
-  filterScrollContent: {
-    paddingRight: 16,
-  },
-  filterGroup: {
-    marginRight: 16,
-  },
-  filterGroupLabel: {
-    fontSize: 14,
-    color: '#6b7280',
-    marginBottom: 8,
-  },
-  filterButtonsRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-  },
-  filterButton: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 16,
-    backgroundColor: '#f3f4f6',
-    marginRight: 8,
-    marginBottom: 8,
-  },
-  filterButtonActive: {
-    backgroundColor: '#4f46e5',
-  },
-  filterButtonText: {
-    fontSize: 13,
-    color: '#4b5563',
-  },
-  filterButtonTextActive: {
-    color: '#ffffff',
-  },
-  filterDivider: {
-    width: 1,
-    backgroundColor: '#e5e7eb',
-    marginRight: 16,
-  },
-  listContent: {
-    padding: 16,
-  },
-  reservationCard: {
-    backgroundColor: '#ffffff',
-    borderRadius: 12,
-    marginBottom: 16,
-    overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: '#e5e7eb',
-  },
-  reservationHeader: {
-    flexDirection: 'row',
-    padding: 16,
-  },
-  reservationInfo: {
-    flex: 1,
-  },
-  dateTimeContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  icon: {
-    marginRight: 6,
-  },
-  dateTimeText: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: '#1f2937',
-  },
-  customerContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  customerText: {
-    fontSize: 14,
-    color: '#4b5563',
-  },
-  detailsRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  statusBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12,
-    marginRight: 8,
-  },
-  statusText: {
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  seatTypeBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12,
-    backgroundColor: '#e5e7eb',
-  },
-  seatTypeText: {
-    fontSize: 12,
-    color: '#4b5563',
-  },
-  expandIconContainer: {
-    justifyContent: 'center',
-    marginLeft: 8,
-  },
-  expandedContent: {
-    padding: 16,
-    borderTopWidth: 1,
-    borderTopColor: '#e5e7eb',
-  },
-  specialRequestsContainer: {
-    marginBottom: 16,
-  },
-  sectionTitle: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#4b5563',
-    marginBottom: 8,
-  },
-  specialRequestsText: {
-    fontSize: 14,
-    color: '#6b7280',
-  },
-  loadingIndicator: {
-    marginVertical: 16,
-  },
-  drinksContainer: {
-    marginBottom: 16,
-  },
-  drinkItem: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    paddingVertical: 6,
-    borderBottomWidth: 1,
-    borderBottomColor: '#f3f4f6',
-  },
-  drinkName: {
-    fontSize: 14,
-    color: '#4b5563',
-  },
-  drinkPrice: {
-    fontSize: 14,
-    color: '#4b5563',
-    fontWeight: '600',
-  },
-  drinkTotalContainer: {
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
-    marginTop: 8,
-  },
-  drinkTotalText: {
-    fontSize: 15,
-    fontWeight: 'bold',
-    color: '#1f2937',
-  },
-  noDrinksText: {
-    fontSize: 14,
-    color: '#6b7280',
-    fontStyle: 'italic',
-    marginBottom: 16,
-  },
-  actionButtonsContainer: {
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
-  },
-  actionButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 8,
-    marginLeft: 8,
-  },
-  actionIcon: {
-    marginRight: 6,
-  },
-  checkInButton: {
-    backgroundColor: '#dcfce7',
-  },
-  checkInButtonText: {
-    color: '#15803d',
-    fontWeight: '600',
-  },
-  noShowButton: {
-    backgroundColor: '#fef3c7',
-  },
-  noShowButtonText: {
-    color: '#b45309',
-    fontWeight: '600',
-  },
-  cancelButton: {
-    backgroundColor: '#fee2e2',
-  },
-  cancelButtonText: {
-    color: '#b91c1c',
-    fontWeight: '600',
-  },
-});
+const FilterButton: React.FC<FilterButtonProps> = ({ label, isActive, onPress }) => (
+    <TouchableOpacity
+        // Use template literal for conditional classes
+        className={`
+            px-3.5 py-1.5 rounded-full mr-2 mb-2 border
+            ${isActive
+                ? 'bg-indigo-600 border-indigo-700'
+                : 'bg-gray-100 border-gray-300 hover:bg-gray-200'}
+        `}
+        onPress={onPress}
+        activeOpacity={0.8} // Add touch feedback
+    >
+        <Text
+            // Use template literal for conditional classes
+            className={`
+                text-sm font-medium
+                ${isActive ? 'text-white' : 'text-gray-700'}
+            `}
+        >
+            {label}
+        </Text>
+    </TouchableOpacity>
+);
+
+interface FilterBarProps {
+    statusFilter: ReservationStatus | 'all';
+    setStatusFilter: (status: ReservationStatus | 'all') => void;
+    dateFilter: 'today' | 'upcoming' | 'past' | 'all';
+    setDateFilter: (date: 'today' | 'upcoming' | 'past' | 'all') => void;
+}
+
+const FilterBar: React.FC<FilterBarProps> = ({
+    statusFilter,
+    setStatusFilter,
+    dateFilter,
+    setDateFilter,
+}) => {
+    const statusOptions: (ReservationStatus | 'all')[] = ['all', 'confirmed', 'completed', 'cancelled', 'no_show'];
+    const dateOptions: ('today' | 'upcoming' | 'past' | 'all')[] = ['upcoming', 'today', 'past', 'all'];
+
+    return (
+        <View className="p-4 bg-white border-b border-gray-200">
+            <Text className="text-base font-semibold text-gray-700 mb-3 flex-row items-center">
+                <Filter size={18} className="text-gray-600 mr-2" />
+                Filters
+            </Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} className="-mb-2">
+                {/* Status Filters */}
+                <View className="flex-row items-center mr-4">
+                    <Text className="text-sm font-medium text-gray-500 mr-2">Status:</Text>
+                    {statusOptions.map((status) => (
+                        <FilterButton
+                            key={status}
+                            label={status.charAt(0).toUpperCase() + status.slice(1).replace('_', ' ')} // Also replace underscore
+                            isActive={statusFilter === status}
+                            onPress={() => setStatusFilter(status)}
+                        />
+                    ))}
+                </View>
+            </ScrollView>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} className="mt-2">
+              {/* Date Filters */}
+              <View className="flex-row items-center">
+                    <Text className="text-sm font-medium text-gray-500 mr-2">Date:</Text>
+                    {dateOptions.map((date) => (
+                        <FilterButton
+                            key={date}
+                            label={date.charAt(0).toUpperCase() + date.slice(1)}
+                            isActive={dateFilter === date}
+                            onPress={() => setDateFilter(date)}
+                        />
+                    ))}
+                </View>
+            </ScrollView>
+        </View>
+    );
+};
+
+interface ReservationDetailsProps {
+    reservation: Reservation;
+    reservationDrinks: ReservationDrink[] | undefined;
+    isLoadingDrinks: boolean;
+    onCheckIn: () => void;
+    onNoShow: () => void;
+    onCancel: () => void;
+    isUpdatingStatus: boolean;
+}
+
+const ReservationDetails: React.FC<ReservationDetailsProps> = ({
+    reservation,
+    reservationDrinks,
+    isLoadingDrinks,
+    onCheckIn,
+    onNoShow,
+    onCancel,
+    isUpdatingStatus,
+}) => {
+    const totalDrinkPrice = useMemo(() => {
+        return (reservationDrinks ?? []).reduce(
+            (total, drink) => total + drink.price_at_booking * drink.quantity,
+            0
+        );
+    }, [reservationDrinks]);
+
+    const hasDrinks = reservationDrinks && reservationDrinks.length > 0;
+    const hasSpecialRequests = !!reservation.special_requests;
+
+    return (
+        <View className="px-4 pb-4 pt-3 bg-gray-50 border-t border-gray-200">
+            {/* Special Requests */}
+            {hasSpecialRequests && (
+                <View className="mb-4">
+                    <Text className="text-sm font-semibold text-gray-700 mb-1.5 flex-row items-center">
+                        <MessageSquare size={ICON_SIZE - 2} className={`${ICON_COLOR} mr-1.5`} />
+                        Special Requests
+                    </Text>
+                    <Text className="text-sm text-gray-600 leading-snug">
+                        {reservation.special_requests}
+                    </Text>
+                </View>
+            )}
+
+            {/* Drinks */}
+            <View className="mb-4">
+                 <Text className="text-sm font-semibold text-gray-700 mb-1.5 flex-row items-center">
+                    <GlassWater size={ICON_SIZE - 2} className={`${ICON_COLOR} mr-1.5`} />
+                    Pre-ordered Drinks
+                </Text>
+                {isLoadingDrinks ? (
+                    <ActivityIndicator size="small" color="#4f46e5" className="my-2" />
+                ) : hasDrinks ? (
+                    <View>
+                        {reservationDrinks?.map((drink) => (
+                            <View key={drink.id} className="flex-row justify-between items-center py-1.5 border-b border-gray-100 last:border-b-0">
+                                <Text className="text-sm text-gray-600">
+                                    {drink.quantity}x {drink.drink_name_at_booking}
+                                </Text>
+                                <Text className="text-sm font-medium text-gray-700">
+                                    ${(drink.price_at_booking * drink.quantity).toFixed(2)}
+                                </Text>
+                            </View>
+                        ))}
+                        <View className="flex-row justify-end mt-2 pt-2 border-t border-gray-200">
+                            <Text className="text-sm font-bold text-gray-800">
+                                Drinks Total: ${totalDrinkPrice.toFixed(2)}
+                            </Text>
+                        </View>
+                    </View>
+                ) : (
+                     <Text className="text-sm text-gray-500 italic">
+                        No drinks pre-ordered.
+                    </Text>
+                )}
+            </View>
+
+             {/* No Details Fallback */}
+             {!hasSpecialRequests && !hasDrinks && !isLoadingDrinks && (
+                <Text className="text-sm text-gray-500 italic mb-4">
+                    No special requests or pre-ordered drinks.
+                </Text>
+             )}
+
+            {/* Action Buttons */}
+            <View className="flex-row justify-end flex-wrap -mb-2">
+                {reservation.status !== 'completed' && reservation.status !== 'cancelled' && (
+                    <TouchableOpacity
+                        className="flex-row items-center bg-green-100 border border-green-300 px-3 py-1.5 rounded-md ml-2 mb-2"
+                        onPress={onCheckIn}
+                        disabled={isUpdatingStatus}
+                        activeOpacity={0.7}
+                    >
+                        <CheckCircle size={ICON_SIZE - 2} className="text-green-700 mr-1.5" />
+                        <Text className="text-sm font-medium text-green-700">Check In</Text>
+                    </TouchableOpacity>
+                )}
+                {reservation.status !== 'no_show' && reservation.status !== 'completed' && reservation.status !== 'cancelled' && (
+                    <TouchableOpacity
+                        className="flex-row items-center bg-yellow-100 border border-yellow-300 px-3 py-1.5 rounded-md ml-2 mb-2"
+                        onPress={onNoShow}
+                        disabled={isUpdatingStatus}
+                        activeOpacity={0.7}
+                    >
+                        <XCircle size={ICON_SIZE - 2} className="text-yellow-700 mr-1.5" />
+                        <Text className="text-sm font-medium text-yellow-700">No Show</Text>
+                    </TouchableOpacity>
+                )}
+                {reservation.status !== 'cancelled' && reservation.status !== 'completed' && (
+                    <TouchableOpacity
+                        className="flex-row items-center bg-red-100 border border-red-300 px-3 py-1.5 rounded-md ml-2 mb-2"
+                        onPress={onCancel}
+                        disabled={isUpdatingStatus}
+                        activeOpacity={0.7}
+                    >
+                        <XCircle size={ICON_SIZE - 2} className="text-red-700 mr-1.5" />
+                        <Text className="text-sm font-medium text-red-700">Cancel</Text>
+                    </TouchableOpacity>
+                )}
+            </View>
+            {isUpdatingStatus && <ActivityIndicator size="small" color="#4f46e5" className="mt-2 self-end" />}
+        </View>
+    );
+};
+
+interface ReservationListItemProps {
+    reservation: Reservation;
+    isExpanded: boolean;
+    onToggleDetails: () => void;
+    onCheckIn: () => void;
+    onNoShow: () => void;
+    onCancel: () => void;
+    reservationDrinks: ReservationDrink[] | undefined;
+    isLoadingDrinks: boolean;
+    isUpdatingStatus: boolean;
+}
+
+const ReservationListItem: React.FC<ReservationListItemProps> = ({
+    reservation,
+    isExpanded,
+    onToggleDetails,
+    ...detailProps // Pass down remaining props to ReservationDetails
+}) => {
+    const reservationDate = parseISO(reservation.reservation_date);
+    const statusStyle = STATUS_STYLES[reservation.status];
+
+    return (
+        <View className="bg-white rounded-lg border border-gray-200 shadow-sm mb-4 overflow-hidden">
+            {/* Header Section */}
+            <TouchableOpacity
+                className="flex-row items-center justify-between p-4"
+                onPress={onToggleDetails}
+                activeOpacity={0.7}
+            >
+                <View className="flex-1 mr-3">
+                    {/* Date and Time */}
+                    <View className="flex-row items-center mb-2">
+                        <Calendar size={ICON_SIZE} className={`${ICON_COLOR} mr-2`} />
+                        <Text className="text-base font-semibold text-gray-800">
+                            {format(reservationDate, 'EEE, MMM d, yyyy')}
+                        </Text>
+                        <Text className="text-base text-gray-600 ml-1">
+                            at {format(reservationDate, 'h:mm a')}
+                        </Text>
+                    </View>
+
+                    {/* Customer and Party Size */}
+                    <View className="flex-row items-center mb-2.5">
+                        <Users size={ICON_SIZE} className={`${ICON_COLOR} mr-2`} />
+                        <Text className="text-sm text-gray-700 flex-shrink" numberOfLines={1}>
+                            {reservation.customer.name || 'Unnamed Customer'}
+                            <Text className="text-gray-500">
+                                {' '}· {reservation.party_size} guest{reservation.party_size === 1 ? '' : 's'}
+                            </Text>
+                        </Text>
+                    </View>
+
+                    {/* Status and Seat Type Badges */}
+                    <View className="flex-row flex-wrap items-center">
+                        <View
+                            // Use template literal for dynamic classes based on status
+                            className={`
+                                flex-row items-center px-2.5 py-0.5 rounded-full mr-2 mb-1 border
+                                ${statusStyle.bg} ${statusStyle.border}
+                            `}
+                        >
+                            <Text
+                                // Use template literal for dynamic text color
+                                className={`
+                                    text-xs font-medium capitalize
+                                    ${statusStyle.text}
+                                `}
+                            >
+                                {reservation.status.replace('_', ' ')}
+                            </Text>
+                        </View>
+                        <View className="flex-row items-center bg-indigo-100 px-2.5 py-0.5 rounded-full mb-1 border border-indigo-200">
+                            <Utensils size={ICON_SIZE - 4} className="text-indigo-700 mr-1" />
+                            <Text className="text-xs font-medium text-indigo-700">
+                                {SEAT_TYPE_LABELS[reservation.seat_type]}
+                            </Text>
+                        </View>
+                    </View>
+                </View>
+
+                {/* Expand Icon */}
+                <View>
+                    {isExpanded ? (
+                        <ChevronUp size={20} className="text-gray-500" />
+                    ) : (
+                        <ChevronDown size={20} className="text-gray-500" />
+                    )}
+                </View>
+            </TouchableOpacity>
+
+            {/* Expanded Details Section */}
+            {isExpanded && <ReservationDetails reservation={reservation} {...detailProps} />}
+        </View>
+    );
+};
+
+// --- Status Components ---
+
+const LoadingIndicator: React.FC<{ message?: string }> = ({ message = "Loading reservations..." }) => (
+    <View className="flex-1 justify-center items-center p-4 bg-gray-50">
+        <ActivityIndicator size="large" color="#4f46e5" />
+        <Text className="mt-3 text-base text-gray-600">{message}</Text>
+    </View>
+);
+
+const ErrorDisplay: React.FC<{ error: Error | null; onRetry: () => void }> = ({ error, onRetry }) => (
+    <View className="flex-1 justify-center items-center p-6 bg-red-50">
+        <AlertCircle size={48} className="text-red-500" />
+        <Text className="mt-4 text-lg font-semibold text-red-800">
+            Failed to load reservations
+        </Text>
+        <Text className="mt-2 text-sm text-red-700 text-center">
+            {error instanceof Error ? error.message : 'An unknown error occurred'}
+        </Text>
+        <TouchableOpacity
+            className="mt-6 bg-red-600 px-5 py-2 rounded-lg shadow-sm"
+            onPress={onRetry}
+            activeOpacity={0.8}
+        >
+            <Text className="text-white font-medium">Retry</Text>
+        </TouchableOpacity>
+    </View>
+);
+
+const EmptyState: React.FC<{ message: string }> = ({ message }) => (
+    <View className="flex-1 justify-center items-center p-8 bg-gray-50 mt-4">
+        <Calendar size={48} className="text-gray-400" />
+        <Text className="mt-4 text-lg font-semibold text-gray-700">
+            No Reservations Found
+        </Text>
+        <Text className="mt-2 text-sm text-gray-500 text-center max-w-xs">
+            {message}
+        </Text>
+    </View>
+);
+
+
+// --- Main Screen Component ---
+
+export default function ReservationsScreen() {
+    const { barId } = useLocalSearchParams<{ barId: string }>();
+    const profile = useAuthStore((s) => s.profile);
+    const toast = useToast();
+    const queryClient = useQueryClient();
+
+    const [statusFilter, setStatusFilter] = useState<ReservationStatus | 'all'>('all');
+    const [dateFilter, setDateFilter] = useState<'today' | 'upcoming' | 'past' | 'all'>('upcoming');
+    const [selectedReservation, setSelectedReservation] = useState<string | null>(null);
+
+    // --- Data Fetching ---
+    const {
+        data: reservations,
+        isLoading: isLoadingReservations,
+        error: reservationsError,
+        refetch: refetchReservations,
+        isRefetching,
+    } = useQuery({
+        queryKey: ['reservations', barId],
+        queryFn: async () => {
+            if (!barId) throw new Error('Bar ID is required');
+            const { data, error } = await supabase
+                .from('reservations')
+                .select('*, customer:profiles!reservations_customer_id_fkey(id, name, email)')
+                .eq('bar_id', barId)
+                .order('reservation_date', { ascending: true });
+            if (error) throw error;
+            return data as Reservation[];
+        },
+        enabled: !!barId && !!profile,
+    });
+
+    const { data: reservationDrinks, isLoading: isLoadingDrinks } = useQuery({
+        queryKey: ['reservation_drinks', selectedReservation],
+        queryFn: async () => {
+            if (!selectedReservation) return [];
+            const { data, error } = await supabase
+                .from('reservation_drinks')
+                .select('*')
+                .eq('reservation_id', selectedReservation);
+            if (error) throw error;
+            return data as ReservationDrink[];
+        },
+        enabled: !!selectedReservation, // Only fetch when a reservation is selected/expanded
+    });
+
+    // --- Mutations ---
+    const updateReservationStatus = useMutation({
+        mutationFn: async ({
+            reservationId,
+            status,
+            checkedInAt = null,
+        }: {
+            reservationId: string;
+            status: ReservationStatus;
+            checkedInAt?: string | null;
+        }) => {
+            const { error } = await supabase
+                .from('reservations')
+                .update({ status, ...(checkedInAt && { checked_in_at: checkedInAt }) })
+                .eq('id', reservationId);
+            if (error) throw error;
+        },
+        onSuccess: (_, variables) => {
+            queryClient.invalidateQueries({ queryKey: ['reservations', barId] });
+            toast.show({ type: 'success', text1: `Reservation marked as ${variables.status.replace('_', ' ')}` });
+        },
+        onError: (error) => {
+            toast.show({
+                type: 'error',
+                text1: 'Update failed',
+                text2: error instanceof Error ? error.message : 'Could not update status',
+            });
+        },
+    });
+
+    // --- Filtering Logic ---
+    const filteredReservations = useMemo(() => {
+        if (!reservations) return [];
+        const todayStart = startOfDay(new Date());
+
+        return reservations.filter(reservation => {
+            const reservationDate = parseISO(reservation.reservation_date);
+            const reservationDateStart = startOfDay(reservationDate);
+
+            // Status filter
+            if (statusFilter !== 'all' && reservation.status !== statusFilter) return false;
+
+            // Date filter
+            const isResToday = isToday(reservationDate);
+            // Upcoming includes today and future dates
+            const isResUpcoming = isAfter(reservationDateStart, todayStart) || isResToday;
+            // Past is strictly before today
+            const isResPast = isBefore(reservationDateStart, todayStart);
+
+            if (dateFilter === 'today' && !isResToday) return false;
+            if (dateFilter === 'upcoming' && !isResUpcoming) return false;
+            if (dateFilter === 'past' && !isResPast) return false;
+
+            return true;
+        });
+    }, [reservations, statusFilter, dateFilter]);
+
+    // --- Event Handlers ---
+    const handleToggleDetails = useCallback((reservationId: string) => {
+        setSelectedReservation(prevId => (prevId === reservationId ? null : reservationId));
+    }, []);
+
+    const handleCheckIn = useCallback((reservation: Reservation) => {
+         if (reservation.status === 'completed') {
+             toast.show({ type: 'info', text1: 'Already checked in' }); return;
+         }
+         if (reservation.status === 'cancelled') {
+              Alert.alert('Confirm Check-in', 'This reservation was cancelled. Still check them in?', [
+                 { text: 'No', style: 'cancel' },
+                 { text: 'Yes', onPress: () => updateReservationStatus.mutate({ reservationId: reservation.id, status: 'completed', checkedInAt: new Date().toISOString() }) }
+              ]);
+         } else {
+            updateReservationStatus.mutate({ reservationId: reservation.id, status: 'completed', checkedInAt: new Date().toISOString() });
+         }
+    }, [toast, updateReservationStatus]);
+
+    const handleNoShow = useCallback((reservation: Reservation) => {
+         if (reservation.status === 'no_show') {
+            toast.show({ type: 'info', text1: 'Already marked as no-show' }); return;
+         }
+        Alert.alert('Confirm No-Show', 'Mark this reservation as a no-show?', [
+            { text: 'Cancel', style: 'cancel' },
+            { text: 'Mark No-Show', style: 'destructive', onPress: () => updateReservationStatus.mutate({ reservationId: reservation.id, status: 'no_show' }) }
+        ]);
+    }, [toast, updateReservationStatus]);
+
+    const handleCancel = useCallback((reservation: Reservation) => {
+        if (reservation.status === 'cancelled') {
+             toast.show({ type: 'info', text1: 'Already cancelled' }); return;
+        }
+        Alert.alert('Confirm Cancellation', 'Cancel this reservation?', [
+            { text: 'No', style: 'cancel' },
+            { text: 'Yes, Cancel', style: 'destructive', onPress: () => updateReservationStatus.mutate({ reservationId: reservation.id, status: 'cancelled' }) }
+        ]);
+    }, [toast, updateReservationStatus]);
+
+    const onRefresh = useCallback(() => {
+        refetchReservations();
+    }, [refetchReservations]);
+
+
+    // --- Render Logic ---
+    if (isLoadingReservations && !isRefetching) { // Show full loading only on initial load
+        return <SafeAreaView className="flex-1"><LoadingIndicator /></SafeAreaView>;
+    }
+
+    if (reservationsError && !reservations) { // Show error only if there's no cached data
+        return <SafeAreaView className="flex-1"><ErrorDisplay error={reservationsError} onRetry={refetchReservations} /></SafeAreaView>;
+    }
+
+    const getEmptyStateMessage = () => {
+        if (statusFilter !== 'all' || dateFilter !== 'upcoming') {
+            return "Try adjusting your filters or checking different date ranges to find reservations.";
+        }
+        return "There are no upcoming reservations matching the current filters.";
+    }
+
+    return (
+        <SafeAreaView className="flex-1 bg-gray-100">
+            {/* Header */}
+            <View className="p-4 bg-white border-b border-gray-200 shadow-sm">
+                <Text className="text-2xl font-bold text-gray-800">
+                    Reservations
+                </Text>
+            </View>
+
+            {/* Filters */}
+            <FilterBar
+                statusFilter={statusFilter}
+                setStatusFilter={setStatusFilter}
+                dateFilter={dateFilter}
+                setDateFilter={setDateFilter}
+            />
+
+            {/* Content Area */}
+            {filteredReservations.length === 0 ? (
+                <ScrollView
+                    contentContainerStyle={{ flexGrow: 1 }} // Ensure container grows for centering
+                     refreshControl={ // Allow refresh even when empty
+                        <RefreshControl refreshing={isRefetching} onRefresh={onRefresh} tintColor="#4f46e5"/>
+                    }
+                    // Apply className directly if needed, e.g., for background
+                    // className="bg-gray-50"
+                >
+                    <EmptyState message={getEmptyStateMessage()} />
+                </ScrollView>
+            ) : (
+                <FlatList
+                    data={filteredReservations}
+                    keyExtractor={(item) => item.id}
+                    renderItem={({ item }) => (
+                        <ReservationListItem
+                            reservation={item}
+                            isExpanded={selectedReservation === item.id}
+                            onToggleDetails={() => handleToggleDetails(item.id)}
+                            onCheckIn={() => handleCheckIn(item)}
+                            onNoShow={() => handleNoShow(item)}
+                            onCancel={() => handleCancel(item)}
+                            // Pass drink data/state only if expanded for potential optimization
+                            reservationDrinks={selectedReservation === item.id ? reservationDrinks : undefined}
+                            isLoadingDrinks={selectedReservation === item.id && isLoadingDrinks}
+                            isUpdatingStatus={updateReservationStatus.isPending && updateReservationStatus.variables?.reservationId === item.id}
+                        />
+                    )}
+                    // Use contentContainerClassName for FlatList content styling
+                    contentContainerClassName="p-4"
+                    showsVerticalScrollIndicator={false}
+                    refreshControl={
+                        <RefreshControl refreshing={isRefetching} onRefresh={onRefresh} tintColor="#4f46e5"/>
+                    }
+                />
+            )}
+        </SafeAreaView>
+    );
+}
