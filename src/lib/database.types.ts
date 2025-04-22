@@ -53,6 +53,44 @@ export type Database = {
           },
         ]
       }
+      bar_images: {
+        Row: {
+          bar_id: string | null
+          created_at: string | null
+          display_order: number
+          file_path: string
+          id: string
+          is_primary: boolean | null
+          updated_at: string | null
+        }
+        Insert: {
+          bar_id?: string | null
+          created_at?: string | null
+          display_order?: number
+          file_path: string
+          id?: string
+          is_primary?: boolean | null
+          updated_at?: string | null
+        }
+        Update: {
+          bar_id?: string | null
+          created_at?: string | null
+          display_order?: number
+          file_path?: string
+          id?: string
+          is_primary?: boolean | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "bar_images_bar_id_fkey"
+            columns: ["bar_id"]
+            isOneToOne: false
+            referencedRelation: "bars"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       bars: {
         Row: {
           address: string

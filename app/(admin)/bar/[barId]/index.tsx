@@ -123,6 +123,15 @@ const BarOptionsScreen = (): JSX.Element | null => {
         >
           <Text className="text-gray-800 font-medium">Manage Bar Staff</Text>
         </TouchableOpacity>
+        <TouchableOpacity
+          className="bg-gray-100 px-6 py-4 rounded-lg items-center"
+          accessibilityRole="button"
+          accessibilityLabel="Images"
+          activeOpacity={0.85}
+          onPress={() => router.push(`/(admin)/bar/${barId}/images`)}
+        >
+          <Text className="text-gray-800 font-medium">Manage Bar Images</Text>
+        </TouchableOpacity>
         {/* Delete Bar Button */}
         <TouchableOpacity
           className="bg-red-600 px-6 py-4 rounded-lg items-center"
