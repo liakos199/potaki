@@ -288,6 +288,8 @@ const BarDetailsScreen = (): JSX.Element => {
       <Animated.ScrollView 
         className="flex-1" 
         showsVerticalScrollIndicator={false}
+        bounces={false}
+        overScrollMode="never"
         onScroll={Animated.event(
           [{ nativeEvent: { contentOffset: { y: scrollY } } }],
           { useNativeDriver: true }
@@ -451,14 +453,14 @@ const BarDetailsScreen = (): JSX.Element => {
           {/* Description */}
           {bar.description && (
             <View className="mb-6">
-              <Text className="text-lg font-semibold text-white mb-2">About</Text>
+              <Text className="text-lg font-semibold text-white mb-2">About Us</Text>
               <Text className="text-gray-300 leading-6">{bar.description}</Text>
             </View>
           )}
           
           {/* Operating Hours */}
           <View className="mb-6">
-            <Text className="text-lg font-semibold text-white mb-3">Hours</Text>
+            <Text className="text-lg font-semibold text-white mb-3">Hours & Time</Text>
             
             {operatingHours.length > 0 ? (
               <View className="bg-[#1f1f27] rounded-2xl p-4">
@@ -503,7 +505,7 @@ const BarDetailsScreen = (): JSX.Element => {
           
           {/* Make Reservation Button */}
           <Pressable
-            className="mb-8 py-4 bg-[#f01669] rounded-xl items-center"
+            className="mb-20 py-4 bg-[#f01669] rounded-xl items-center"
             accessibilityRole="button"
             accessibilityLabel="Make a reservation"
             onPress={() => router.push(`/reservation/new?barId=${bar.id}`)}

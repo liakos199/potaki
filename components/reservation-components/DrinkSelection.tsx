@@ -1,19 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, Pressable, ScrollView, ActivityIndicator } from 'react-native';
 import { Wine, Plus, Minus } from 'lucide-react-native';
-import { supabase } from '@/src/lib/supabase'; // Ensure this path is correct
+import { supabase } from '@/src/lib/supabase';
 
-// --- Corrected Type Definition (is_available REMOVED) ---
-// Matches the actual DB schema ONLY
 type DrinkOption = {
-  id: string;           // from DB: uuid
-  name: string | null;  // from DB: text null
-  price: number;        // from DB: numeric(8, 2)
-  type: string;         // from DB: public.drink_option_type
-  // --- Fields from DB not directly used in rendering, but available if selected ---
-  // bar_id: string;
-  // created_at: string;
-  // updated_at: string;
+  id: string;
+  name: string | null;
+  price: number;
+  type: string;
 };
 
 type SelectedDrink = {
@@ -22,7 +16,7 @@ type SelectedDrink = {
 };
 
 type DrinkSelectionProps = {
-  barId: string | null; // Allow null for mock data or initial state
+  barId: string | null;
   selectedDrinks: SelectedDrink[];
   onDrinksChange: (drinks: SelectedDrink[]) => void;
 };
@@ -38,36 +32,29 @@ const DrinkSelection: React.FC<DrinkSelectionProps> = ({
 
   useEffect(() => {
     const fetchDrinkOptions = async () => {
-      if (!barId) return; // Guard clause if no barId
-
+      if (!barId) return;
       setLoading(true);
       try {
-        // Select only the columns that exist and are needed
         const { data, error } = await supabase
           .from('drink_options')
-          .select('id, name, price, type') // Select necessary columns explicitly
+          .select('id, name, price, type')
           .eq('bar_id', barId)
-          .order('name'); // Order by name
-
+          .order('name');
         if (error) {
           console.error('Error fetching drink options:', error);
-          setDrinkOptions([]); // Clear options on error
+          setDrinkOptions([]);
           return;
         }
-
         if (data) {
-          // Map the fetched data directly to our simplified DrinkOption type
-          // No need to add is_available anymore
           const fetchedDrinks = data.map(drink => ({
             id: drink.id,
             name: drink.name,
             price: drink.price,
             type: drink.type,
-            // <<<--- is_available property is NOT added ---<<<
           }));
           setDrinkOptions(fetchedDrinks);
         } else {
-          setDrinkOptions([]); // Handle null/undefined data response
+          setDrinkOptions([]);
         }
       } catch (error) {
         console.error('Unexpected error in fetchDrinkOptions:', error);
@@ -76,38 +63,31 @@ const DrinkSelection: React.FC<DrinkSelectionProps> = ({
         setLoading(false);
       }
     };
-
-    // --- Mock Data Logic (Updated - no is_available) ---
     if (!barId) {
        console.log("Using Mock Drink Data (no barId provided)");
        setLoading(true);
        setTimeout(() => {
-        // Mock data now only includes fields defined in the updated DrinkOption type
         const mockDrinks: DrinkOption[] = [
           { id: 'mock-1', name: 'Signature Cocktail', price: 12.99, type: 'cocktail' },
           { id: 'mock-2', name: 'Local Craft Beer', price: 8.99, type: 'beer' },
           { id: 'mock-3', name: 'House Red Wine', price: 10.99, type: 'wine' },
           { id: 'mock-4', name: 'Classic Whiskey', price: 11.99, type: 'spirit' },
-          { id: 'mock-5', name: null, price: 15.99, type: 'wine' }, // Example of null name
+          { id: 'mock-5', name: null, price: 15.99, type: 'wine' },
         ];
         setDrinkOptions(mockDrinks);
         setLoading(false);
        }, 500);
     } else {
-      // Fetch real data if barId is present
       fetchDrinkOptions();
     }
-  }, [barId]); // Re-run effect if barId changes
+  }, [barId]);
 
-  // Get unique drink types for categories
   const drinkTypes = ['all', ...new Set(drinkOptions.map(drink => drink.type).filter(Boolean))];
 
-  // Filter drinks by category - This logic remains correct as it never used is_available
   const filteredDrinks = activeCategory === 'all'
     ? drinkOptions
     : drinkOptions.filter(drink => drink.type === activeCategory);
 
-  // --- Helper Functions (Unchanged) ---
   const addDrink = (drink: DrinkOption) => {
     const existingDrinkIndex = selectedDrinks.findIndex(item => item.drinkOption.id === drink.id);
     if (existingDrinkIndex >= 0) {
@@ -141,25 +121,22 @@ const DrinkSelection: React.FC<DrinkSelectionProps> = ({
     (sum, item) => sum + (item.drinkOption.price * item.quantity), 0
   );
 
-  // --- JSX Rendering (Unchanged from previous correct version) ---
   return (
     <View className="mb-6">
       <Text className="text-lg font-semibold text-white mb-2">Pre-order Drinks (Optional)</Text>
       <Text className="text-gray-400 mb-4">
         Skip the wait by pre-ordering drinks for your reservation
       </Text>
-
-      {/* Categories */}
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
         className="mb-4"
-        contentContainerStyle={{ paddingHorizontal: 4 }} // Optional horizontal padding
+        contentContainerStyle={{ paddingHorizontal: 4 }}
       >
         {drinkTypes.map((type) => (
           <Pressable
             key={type}
-            className={`mx-1 px-4 py-2 rounded-full ${ // Use mx-1 for spacing
+            className={`mx-1 px-4 py-2 rounded-full ${
               activeCategory === type ? 'bg-[#ff4d6d]' : 'bg-[#1f1f27]'
             }`}
             onPress={() => setActiveCategory(type)}
@@ -172,8 +149,6 @@ const DrinkSelection: React.FC<DrinkSelectionProps> = ({
           </Pressable>
         ))}
       </ScrollView>
-
-      {/* Drink list */}
       {loading ? (
         <View className="items-center py-6">
           <ActivityIndicator size="large" color="#ff4d6d" />
@@ -188,17 +163,14 @@ const DrinkSelection: React.FC<DrinkSelectionProps> = ({
         <View>
           {filteredDrinks.map((drink) => {
             const quantity = getDrinkQuantity(drink.id);
-
             return (
               <View
                 key={drink.id}
                 className="bg-[#1f1f27] p-4 rounded-xl mb-3 flex-row items-center"
               >
-                {/* Placeholder icon */}
                 <View className="w-16 h-16 bg-[#2a2a35] rounded-lg mr-3 items-center justify-center flex-shrink-0">
                   <Wine size={24} color="#9ca3af" />
                 </View>
-
                 <View className="flex-1 mr-2">
                   <Text className="text-white font-medium" numberOfLines={2}>
                     {drink.name || `Unnamed ${drink.type || 'Drink'}`}
@@ -207,8 +179,6 @@ const DrinkSelection: React.FC<DrinkSelectionProps> = ({
                     ${drink.price?.toFixed(2) ?? 'N/A'}
                   </Text>
                 </View>
-
-                {/* Action Buttons */}
                 <View className="flex-col items-center w-20">
                   {quantity > 0 ? (
                     <View className="flex-row items-center justify-center">
@@ -240,8 +210,6 @@ const DrinkSelection: React.FC<DrinkSelectionProps> = ({
           })}
         </View>
       )}
-
-      {/* Selected drinks summary */}
       {selectedDrinks.length > 0 && !loading && (
         <View className="bg-[#ff4d6d]/10 p-4 rounded-xl mt-4 border border-[#ff4d6d]/20">
           <Text className="text-white text-base font-semibold mb-3">Order Summary</Text>

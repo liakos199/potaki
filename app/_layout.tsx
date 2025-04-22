@@ -1,26 +1,24 @@
-// app/_layout.tsx
-import 'react-native-gesture-handler'; // <-- MUST BE THE FIRST IMPORT
+import 'react-native-gesture-handler'; 
 import { useEffect } from "react";
 import { Stack } from "expo-router";
 import { SafeAreaProvider } from "react-native-safe-area-context";
-import { useAuthStore } from "@/src/features/auth/store/auth-store"; // Your existing imports
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query'; // Your existing imports
-import { GestureHandlerRootView } from 'react-native-gesture-handler'; // Import Gesture Handler
-import { StyleSheet } from 'react-native'; // Import StyleSheet
-import "./global.css"; // Your global NativeWind styles
+import { useAuthStore } from "@/src/features/auth/store/auth-store"; 
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'; 
+import { GestureHandlerRootView } from 'react-native-gesture-handler'; 
+import { StyleSheet } from 'react-native';
+import "./global.css"; 
 import { ToastProvider } from '@/src/components/general/Toast';
 
-const queryClient = new QueryClient(); // Your existing setup
+const queryClient = new QueryClient();
 
 export default function RootLayout() {
-  const restoreSession = useAuthStore((s) => s.restoreSession); // Your existing logic
+  const restoreSession = useAuthStore((s) => s.restoreSession);
 
   useEffect(() => {
     restoreSession();
-  }, [restoreSession]); // Your existing logic
+  }, [restoreSession]); 
 
   return (
-    // Your existing providers
     <QueryClientProvider client={queryClient}>
       <SafeAreaProvider>
         <GestureHandlerRootView style={styles.container}>
@@ -33,9 +31,9 @@ export default function RootLayout() {
   );
 }
 
-// Style for the Gesture Handler wrapper
+
 const styles = StyleSheet.create({
   container: {
-    flex: 1, // Crucial for the gesture handler to cover the screen
+    flex: 1,
   },
 });

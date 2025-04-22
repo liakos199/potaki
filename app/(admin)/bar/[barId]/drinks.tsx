@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, TouchableOpacity, TextInput, Modal, ActivityIndicator, KeyboardAvoidingView, Alert, Platform, ScrollView } from 'react-native';
+import { View, Text, Pressable, TextInput, Modal, ActivityIndicator, KeyboardAvoidingView, Alert, Platform, ScrollView } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useForm, Controller } from 'react-hook-form';
@@ -9,13 +9,14 @@ import { supabase } from '@/src/lib/supabase';
 import { useAuthStore } from '@/src/features/auth/store/auth-store';
 import type { Database } from '@/src/lib/database.types';
 import { useToast } from '@/src/components/general/Toast';
+import { StatusBar } from 'expo-status-bar';
+import { ArrowLeft, Wine, Plus, Edit2, Trash2, X, DollarSign, Tag, Info, AlertCircle } from 'lucide-react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { LinearGradient } from 'expo-linear-gradient';
 
 // Types
 const drinkTypes = ['single-drink', 'bottle'] as const;
 type DrinkType = typeof drinkTypes[number];
-
-
-
 
 type Drink = Database['public']['Tables']['drink_options']['Row'];
 
@@ -43,58 +44,65 @@ const DrinkItem = ({
 }) => (
   <View
     key={drink.id}
-    className="flex-row items-center justify-between bg-white rounded-lg shadow px-4 py-3 mb-3"
+    className="bg-[#1f1f27] rounded-xl p-4 mb-3"
   >
-    <View>
-      <Text className="text-lg font-semibold">{drink.name}</Text>
-      <Text className="text-base mt-1">€{drink.price.toFixed(2)}</Text>
-    </View>
-    <View className="flex-row gap-2">
-      <TouchableOpacity
-        className="px-3 py-1 bg-yellow-500 rounded-lg"
-        onPress={() => onEdit(drink)}
-        accessibilityRole="button"
-        accessibilityLabel={`Edit ${drink.name}`}
-      >
-        <Text className="text-white">Edit</Text>
-      </TouchableOpacity>
-      <TouchableOpacity
-        className="px-3 py-1 bg-red-500 rounded-lg"
-        onPress={() => onDelete(drink.id)}
-        accessibilityRole="button"
-        accessibilityLabel={`Delete ${drink.name}`}
-        accessibilityHint="Double tap to delete this drink"
-      >
-        <Text className="text-white">Delete</Text>
-      </TouchableOpacity>
+    <View className="flex-row items-center justify-between">
+      <View className="flex-row items-center">
+        <View className="w-10 h-10 rounded-full bg-[#ff4d6d]/10 items-center justify-center mr-3">
+          <Wine size={18} color="#ff4d6d" />
+        </View>
+        <View>
+          <Text className="text-white font-semibold text-lg">{drink.name}</Text>
+          <Text className="text-[#ff4d6d] font-medium mt-1">€{drink.price.toFixed(2)}</Text>
+        </View>
+      </View>
+      <View className="flex-row">
+        <Pressable
+          className="w-9 h-9 rounded-full bg-[#2a2a35] items-center justify-center mr-2"
+          onPress={() => onEdit(drink)}
+          accessibilityRole="button"
+          accessibilityLabel={`Edit ${drink.name}`}
+        >
+          <Edit2 size={16} color="#fff" />
+        </Pressable>
+        <Pressable
+          className="w-9 h-9 rounded-full bg-[#2a2a35] items-center justify-center"
+          onPress={() => onDelete(drink.id)}
+          accessibilityRole="button"
+          accessibilityLabel={`Delete ${drink.name}`}
+          accessibilityHint="Double tap to delete this drink"
+        >
+          <Trash2 size={16} color="#ff4d6d" />
+        </Pressable>
+      </View>
     </View>
   </View>
 );
 
 // Modify the formatPrice function to limit input to 5 digits
 const formatPrice = (text: string): number => {
-    const sanitized = text.replace(/[^0-9.]/g, '');
-    const parts = sanitized.split('.');
-    
-    // Limit to 5 digits total (including decimal part)
-    let integerPart = parts[0];
-    if (integerPart.length > 5) {
-      integerPart = integerPart.slice(0, 5);
-    }
-    
-    const formattedParts = [integerPart];
-    
-    // Handle decimal part if exists
-    if (parts.length > 1) {
-      const decimalPart = parts.slice(1).join('');
-      const digitsLeft = 5 - integerPart.length;
-      formattedParts.push(decimalPart.slice(0, Math.max(digitsLeft, 2)));
-    }
-    
-    const formatted = formattedParts.length > 1 ? formattedParts.join('.') : formattedParts[0];
-    const numericValue = parseFloat(formatted);
-    return formatted === '' ? 0 : isNaN(numericValue) ? 0 : numericValue;
-  };
+  const sanitized = text.replace(/[^0-9.]/g, '');
+  const parts = sanitized.split('.');
+  
+  // Limit to 5 digits total (including decimal part)
+  let integerPart = parts[0];
+  if (integerPart.length > 5) {
+    integerPart = integerPart.slice(0, 5);
+  }
+  
+  const formattedParts = [integerPart];
+  
+  // Handle decimal part if exists
+  if (parts.length > 1) {
+    const decimalPart = parts.slice(1).join('');
+    const digitsLeft = 5 - integerPart.length;
+    formattedParts.push(decimalPart.slice(0, Math.max(digitsLeft, 2)));
+  }
+  
+  const formatted = formattedParts.length > 1 ? formattedParts.join('.') : formattedParts[0];
+  const numericValue = parseFloat(formatted);
+  return formatted === '' ? 0 : isNaN(numericValue) ? 0 : numericValue;
+};
 
 // Single Drink Form Modal Component
 const SingleDrinkFormModal = ({ 
@@ -125,57 +133,77 @@ const SingleDrinkFormModal = ({
         contentContainerStyle={{ flexGrow: 1 }}
         keyboardShouldPersistTaps="handled"
       >
-        <View className="flex-1 justify-center items-center bg-black/40 px-4">
-          <View className="bg-white rounded-lg p-6 w-full max-w-md">
-            <Text className="text-lg font-bold mb-4">{editingDrink ? 'Edit Single Drink' : 'Add Single Drink'}</Text>
+        <View className="flex-1 justify-center items-center bg-black/70 px-4">
+          <View className="bg-[#0f0f13] rounded-2xl p-6 w-full max-w-md border border-[#2a2a35]">
+            <View className="flex-row items-center justify-between mb-6">
+              <Text className="text-xl font-bold text-white">{editingDrink ? 'Edit Single Drink' : 'Add Single Drink'}</Text>
+              <Pressable
+                className="w-8 h-8 rounded-full bg-[#2a2a35] items-center justify-center"
+                onPress={onClose}
+              >
+                <X size={16} color="#fff" />
+              </Pressable>
+            </View>
+            
             {/* Name - Fixed for single drink */}
-            <View className="mb-2">
-              <Text className="mb-1 text-gray-700">Name</Text>
-              <View className="py-2 px-3 bg-gray-100 rounded-lg border border-gray-300">
-                <Text className="text-gray-700">single-drink</Text>
+            <View className="mb-4">
+              <View className="flex-row items-center mb-2">
+                <Tag size={16} color="#9ca3af" />
+                <Text className="ml-2 text-white">Name</Text>
+              </View>
+              <View className="py-3 px-4 bg-[#1f1f27] rounded-xl border border-[#2a2a35]">
+                <Text className="text-gray-300">single-drink</Text>
               </View>
               <Text className="text-xs text-gray-500 mt-1">Name is fixed for single drink type</Text>
             </View>
+            
             {/* Price */}
             <Controller
               control={control}
               name="price"
               render={({ field: { value, onChange } }) => (
-                <View>
-                  <Text className="mb-1 text-gray-700">Price (€)</Text>
-                  <TextInput
-                    className={`border ${errors.price ? 'border-red-500' : 'border-gray-300'} rounded-lg px-3 py-2 mb-2`}
-                    placeholder="0.00"
-                    keyboardType="decimal-pad"
-                    value={value === 0 ? '' : String(value)}
-                    onChangeText={(text) => onChange(formatPrice(text))}
-                    accessibilityLabel="Drink Price"
-                    accessibilityHint="Enter the price of the single drink in Euros"
-                  />
-                  {errors.price && <Text className="text-red-500 text-xs mb-2">{errors.price.message}</Text>}
+                <View className="mb-4">
+                  <View className="flex-row items-center mb-2">
+                    <DollarSign size={16} color="#9ca3af" />
+                    <Text className="ml-2 text-white">Price (€)</Text>
+                  </View>
+                  <View className={`flex-row items-center bg-[#1f1f27] rounded-xl border ${errors.price ? 'border-red-500' : 'border-[#2a2a35]'} px-4 py-3`}>
+                    <Text className="text-gray-300 mr-2">€</Text>
+                    <TextInput
+                      className="flex-1 text-white"
+                      placeholder="0.00"
+                      placeholderTextColor="#6b7280"
+                      keyboardType="decimal-pad"
+                      value={value === 0 ? '' : String(value)}
+                      onChangeText={(text) => onChange(formatPrice(text))}
+                      accessibilityLabel="Drink Price"
+                      accessibilityHint="Enter the price of the single drink in Euros"
+                    />
+                  </View>
+                  {errors.price && <Text className="text-red-500 text-xs mt-1">{errors.price.message}</Text>}
                 </View>
               )}
             />
             
             {/* Actions */}
-            <View className="flex-row justify-end gap-2 mt-4">
-              <TouchableOpacity
-                className="px-4 py-2 rounded-lg bg-gray-100"
+            <View className="flex-row justify-end gap-3 mt-4">
+              <Pressable
+                className="px-5 py-3 rounded-xl bg-[#2a2a35]"
                 onPress={onClose}
                 accessibilityRole="button"
                 accessibilityLabel="Cancel"
               >
-                <Text className="text-gray-700 font-medium">Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                className={`px-4 py-2 rounded-lg ${isSubmitting ? 'bg-indigo-400' : 'bg-indigo-600'}`}
+                <Text className="text-white font-medium">Cancel</Text>
+              </Pressable>
+              <Pressable
+                className={`px-5 py-3 rounded-xl ${isSubmitting ? 'bg-[#ff4d6d]/70' : 'bg-[#ff4d6d]'}`}
                 onPress={handleSubmit(onSubmit)}
                 accessibilityRole="button"
                 accessibilityLabel="Save Single Drink"
                 disabled={isSubmitting}
               >
                 <Text className="text-white font-medium">{isSubmitting ? 'Saving...' : 'Save'}</Text>
-              </TouchableOpacity>
+              </Pressable>
             </View>
           </View>
         </View>
@@ -215,62 +243,83 @@ const BottleFormModal = ({
         contentContainerStyle={{ flexGrow: 1 }}
         keyboardShouldPersistTaps="handled"
       >
-        <View className="flex-1 justify-center items-center bg-black/40 px-4">
-          <View className="bg-white rounded-lg p-6 w-full max-w-md">
-            <Text className="text-lg font-bold mb-4">{editingDrink ? 'Edit Bottle' : 'Add Bottle'}</Text>
+        <View className="flex-1 justify-center items-center bg-black/70 px-4">
+          <View className="bg-[#0f0f13] rounded-2xl p-6 w-full max-w-md border border-[#2a2a35]">
+            <View className="flex-row items-center justify-between mb-6">
+              <Text className="text-xl font-bold text-white">{editingDrink ? 'Edit Bottle' : 'Add Bottle'}</Text>
+              <Pressable
+                className="w-8 h-8 rounded-full bg-[#2a2a35] items-center justify-center"
+                onPress={onClose}
+              >
+                <X size={16} color="#fff" />
+              </Pressable>
+            </View>
+            
             {/* Name */}
             <Controller
               control={control}
               name="name"
               render={({ field: { value, onChange, onBlur } }) => (
-                <View>
-                  <Text className="mb-1 text-gray-700">Name</Text>
+                <View className="mb-4">
+                  <View className="flex-row items-center mb-2">
+                    <Tag size={16} color="#9ca3af" />
+                    <Text className="ml-2 text-white">Name</Text>
+                  </View>
                   <TextInput
-                    className={`border ${errors.name ? 'border-red-500' : 'border-gray-300'} rounded-lg px-3 py-2 mb-2`}
+                    className={`bg-[#1f1f27] rounded-xl border ${errors.name ? 'border-red-500' : 'border-[#2a2a35]'} px-4 py-3 text-white`}
                     placeholder="Bottle Name"
+                    placeholderTextColor="#6b7280"
                     value={value}
                     onChangeText={onChange}
                     accessibilityLabel="Bottle Name"
                     accessibilityHint="Enter the name of the bottle"
                     autoFocus={!editingDrink}
                   />
-                  {errors.name && <Text className="text-red-500 text-xs mb-2">{errors.name.message}</Text>}
+                  {errors.name && <Text className="text-red-500 text-xs mt-1">{errors.name.message}</Text>}
                 </View>
               )}
             />
+            
             {/* Price */}
             <Controller
               control={control}
               name="price"
               render={({ field: { value, onChange } }) => (
-                <View>
-                  <Text className="mb-1 text-gray-700">Price (€)</Text>
-                  <TextInput
-                    className={`border ${errors.price ? 'border-red-500' : 'border-gray-300'} rounded-lg px-3 py-2 mb-2`}
-                    placeholder="0.00"
-                    keyboardType="decimal-pad"
-                    value={value === 0 ? '' : String(value)}
-                    onChangeText={(text) => onChange(formatPrice(text))}
-                    accessibilityLabel="Bottle Price"
-                    accessibilityHint="Enter the price of the bottle in Euros"
-                  />
-                  {errors.price && <Text className="text-red-500 text-xs mb-2">{errors.price.message}</Text>}
+                <View className="mb-4">
+                  <View className="flex-row items-center mb-2">
+                    <DollarSign size={16} color="#9ca3af" />
+                    <Text className="ml-2 text-white">Price (€)</Text>
+                  </View>
+                  <View className={`flex-row items-center bg-[#1f1f27] rounded-xl border ${errors.price ? 'border-red-500' : 'border-[#2a2a35]'} px-4 py-3`}>
+                    <Text className="text-gray-300 mr-2">€</Text>
+                    <TextInput
+                      className="flex-1 text-white"
+                      placeholder="0.00"
+                      placeholderTextColor="#6b7280"
+                      keyboardType="decimal-pad"
+                      value={value === 0 ? '' : String(value)}
+                      onChangeText={(text) => onChange(formatPrice(text))}
+                      accessibilityLabel="Bottle Price"
+                      accessibilityHint="Enter the price of the bottle in Euros"
+                    />
+                  </View>
+                  {errors.price && <Text className="text-red-500 text-xs mt-1">{errors.price.message}</Text>}
                 </View>
               )}
             />
             
             {/* Actions */}
-            <View className="flex-row justify-end gap-2 mt-4">
-              <TouchableOpacity
-                className="px-4 py-2 rounded-lg bg-gray-100"
+            <View className="flex-row justify-end gap-3 mt-4">
+              <Pressable
+                className="px-5 py-3 rounded-xl bg-[#2a2a35]"
                 onPress={onClose}
                 accessibilityRole="button"
                 accessibilityLabel="Cancel"
               >
-                <Text className="text-gray-700 font-medium">Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                className={`px-4 py-2 rounded-lg ${isSubmitting ? 'bg-indigo-400' : 'bg-indigo-600'}`}
+                <Text className="text-white font-medium">Cancel</Text>
+              </Pressable>
+              <Pressable
+                className={`px-5 py-3 rounded-xl ${isSubmitting ? 'bg-[#ff4d6d]/70' : 'bg-[#ff4d6d]'}`}
                 onPress={handleSubmit((values: DrinkFormValues) => {
                   // Check for duplicates before submitting
                   if (!editingDrink && existingBottleNames.includes(values.name)) {
@@ -287,7 +336,7 @@ const BottleFormModal = ({
                 disabled={isSubmitting}
               >
                 <Text className="text-white font-medium">{isSubmitting ? 'Saving...' : 'Save'}</Text>
-              </TouchableOpacity>
+              </Pressable>
             </View>
           </View>
         </View>
@@ -338,11 +387,12 @@ export const DrinksScreen = (): JSX.Element | null => {
   const singleDrink = drinks?.find((d: Drink) => d.type === 'single-drink');
   const isEditingSingleDrink = editingDrink?.type === 'single-drink';
   const toast = useToast();
+  
   // Bottles list
   const bottlesList = drinks?.filter((d) => d.type === 'bottle') || [];
   const bottleNames: string[] = bottlesList
-  .map(bottle => bottle.name)
-  .filter(Boolean) as string[];
+    .map(bottle => bottle.name)
+    .filter(Boolean) as string[];
 
   // Add/Edit Drink mutation
   const upsertDrink = useMutation<void, Error, DrinkFormValues & { id?: string }>({
@@ -412,10 +462,10 @@ export const DrinksScreen = (): JSX.Element | null => {
     setEditingDrink(drink);
     // When editing, we keep the original type and don't allow changing it
     reset({ 
-        name: drink.type === 'single-drink' ? 'single-drink' : (drink.name ?? ''), 
-        type: (drinkTypes.includes(drink.type as DrinkType) ? drink.type : 'single-drink') as DrinkType, 
-        price: drink.price ?? 0 
-      });
+      name: drink.type === 'single-drink' ? 'single-drink' : (drink.name ?? ''), 
+      type: (drinkTypes.includes(drink.type as DrinkType) ? drink.type : 'single-drink') as DrinkType, 
+      price: drink.price ?? 0 
+    });
     
     if (drink.type === 'single-drink') {
       setSingleDrinkModalVisible(true);
@@ -497,34 +547,56 @@ export const DrinksScreen = (): JSX.Element | null => {
   if (!profile || !barId) return null;
 
   return (
-    <View className="flex-1 bg-white">
-      <View className="px-4 pt-8 pb-2 border-b border-gray-100">
-        <Text className="text-xl font-bold">Manage Drinks</Text>
+    <SafeAreaView className="flex-1 bg-[#0f0f13]">
+      <StatusBar style="light" />
+      
+      {/* Header */}
+      <View className="px-5 pt-2 pb-4 border-b border-[#1f1f27]">
+        <View className="flex-row items-center mb-2">
+          <Pressable
+            className="w-10 h-10 rounded-full justify-center items-center mr-3"
+            onPress={() => router.back()}
+            accessibilityRole="button"
+            accessibilityLabel="Go back"
+          >
+            <ArrowLeft size={22} color="#fff" />
+          </Pressable>
+          <Text className="text-xl font-bold text-white flex-1">Manage Drinks</Text>
+        </View>
       </View>
       
       <ScrollView className="flex-1" contentContainerStyle={{ paddingBottom: 32 }}>
         {/* Single Drink Section */}
-        <View className="px-4 py-4 mb-2">
-          <View className="flex-row items-center justify-between mb-2">
-            <Text className="text-lg font-bold">Single Drink</Text>
+        <View className="px-5 py-4">
+          <View className="flex-row items-center justify-between mb-4">
+            <View className="flex-row items-center">
+              <Wine size={20} color="#ff4d6d" />
+              <Text className="text-lg font-bold text-white ml-2">Single Drink</Text>
+            </View>
+            
             {!singleDrink && !drinksLoading && !drinksError && (
-              <TouchableOpacity
-                className="bg-indigo-600 px-3 py-2 rounded-lg"
+              <Pressable
+                className="bg-[#ff4d6d] px-4 py-2 rounded-xl flex-row items-center"
                 onPress={openAddSingleDrinkModal}
                 accessibilityRole="button"
                 accessibilityLabel="Add Single Drink"
                 accessibilityHint="Add a single drink option for your bar"
               >
-                <Text className="text-white font-medium">Add Single Drink</Text>
-              </TouchableOpacity>
+                <Plus size={16} color="#fff" />
+                <Text className="text-white font-medium ml-1">Add</Text>
+              </Pressable>
             )}
           </View>
           
           {drinksLoading ? (
-            <ActivityIndicator className="mt-4" />
+            <View className="items-center py-8">
+              <ActivityIndicator color="#ff4d6d" />
+              <Text className="text-gray-400 mt-2">Loading drinks...</Text>
+            </View>
           ) : drinksError ? (
-            <View className="items-center mt-4">
-              <Text className="text-red-500">Failed to load drinks.</Text>
+            <View className="bg-[#ff4d6d]/10 p-4 rounded-xl flex-row items-start">
+              <AlertCircle size={18} color="#ff4d6d" className="mr-2 mt-0.5" />
+              <Text className="text-gray-300 flex-1">Failed to load drinks. Please try again.</Text>
             </View>
           ) : singleDrink ? (
             <DrinkItem 
@@ -533,33 +605,67 @@ export const DrinksScreen = (): JSX.Element | null => {
               onDelete={confirmDelete}
             />
           ) : (
-            <Text className="text-gray-500 mt-2">No single drink added yet.</Text>
+            <View className="bg-[#1f1f27] p-4 rounded-xl">
+              <Text className="text-gray-400">No single drink added yet.</Text>
+              <Pressable
+                className="bg-[#ff4d6d] px-4 py-3 rounded-xl flex-row items-center justify-center mt-3"
+                onPress={openAddSingleDrinkModal}
+              >
+                <Plus size={16} color="#fff" />
+                <Text className="text-white font-medium ml-1">Add Single Drink</Text>
+              </Pressable>
+            </View>
           )}
+          
+          <View className="bg-[#ff4d6d]/10 p-4 rounded-xl mt-3 flex-row items-start">
+            <Info size={18} color="#ff4d6d" className="mr-2 mt-0.5" />
+            <Text className="text-gray-300 flex-1">
+              The single drink option is used for individual drink orders. You can only have one single drink type.
+            </Text>
+          </View>
         </View>
 
         {/* Bottles Section */}
-        <View className="px-4 py-2">
-          <View className="flex-row items-center justify-between mb-2">
-            <Text className="text-lg font-bold">Bottles</Text>
-            <TouchableOpacity
-              className="bg-indigo-600 px-3 py-2 rounded-lg"
+        <View className="px-5 py-4 mt-2">
+          <View className="flex-row items-center justify-between mb-4">
+            <View className="flex-row items-center">
+              <Wine size={20} color="#ff4d6d" />
+              <Text className="text-lg font-bold text-white ml-2">Bottles</Text>
+            </View>
+            
+            <Pressable
+              className="bg-[#ff4d6d] px-4 py-2 rounded-xl flex-row items-center"
               onPress={openAddBottleModal}
               accessibilityRole="button"
               accessibilityLabel="Add Bottle"
               accessibilityHint="Add a new bottle option for your bar"
             >
-              <Text className="text-white font-medium">Add Bottle</Text>
-            </TouchableOpacity>
+              <Plus size={16} color="#fff" />
+              <Text className="text-white font-medium ml-1">Add</Text>
+            </Pressable>
           </View>
           
           {drinksLoading ? (
-            <ActivityIndicator className="mt-4" />
+            <View className="items-center py-8">
+              <ActivityIndicator color="#ff4d6d" />
+              <Text className="text-gray-400 mt-2">Loading bottles...</Text>
+            </View>
           ) : drinksError ? (
-            <View className="items-center mt-4">
-              <Text className="text-red-500">Failed to load bottles.</Text>
+            <View className="bg-[#ff4d6d]/10 p-4 rounded-xl flex-row items-start">
+              <AlertCircle size={18} color="#ff4d6d" className="mr-2 mt-0.5" />
+              <Text className="text-gray-300 flex-1">Failed to load bottles. Please try again.</Text>
             </View>
           ) : bottlesList.length === 0 ? (
-            <Text className="text-gray-500 mt-2">No bottles added yet.</Text>
+            <View className="bg-[#1f1f27] p-4 rounded-xl">
+              <Text className="text-gray-400">No bottles added yet.</Text>
+              <Pressable
+                className="bg-[#ff4d6d] px-4 py-3 rounded-xl flex-row items-center justify-center mt-3"
+                onPress={openAddBottleModal}
+              >
+                <Plus size={16} color="#fff" />
+                <Text className="text-white font-medium ml-1">Add Bottle</Text>
+              </Pressable>
+            </View>
           ) : (
             bottlesList.map((drink) => (
               <DrinkItem 
@@ -569,6 +675,14 @@ export const DrinksScreen = (): JSX.Element | null => {
                 onDelete={confirmDelete}
               />
             ))
+          )}
+          
+          {bottlesList.length > 0 && (
+            <View className="bg-[#1f1f27] p-4 rounded-xl mt-3">
+              <Text className="text-gray-300 text-center">
+                {bottlesList.length} {bottlesList.length === 1 ? 'bottle' : 'bottles'} available
+              </Text>
+            </View>
           )}
         </View>
       </ScrollView>
@@ -597,7 +711,7 @@ export const DrinksScreen = (): JSX.Element | null => {
         editingDrink={!isEditingSingleDrink ? editingDrink : null}
         existingBottleNames={bottleNames}
       />
-    </View>
+    </SafeAreaView>
   );
 };
 

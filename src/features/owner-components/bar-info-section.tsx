@@ -16,7 +16,7 @@ import { z } from 'zod';
 import { Controller, FieldErrors, Control } from 'react-hook-form';
 import Animated, { useSharedValue, useAnimatedStyle, withTiming } from 'react-native-reanimated';
 
-import EditBarInfoModal, { EditableField } from '@/src/components/general/myModal'; // Adjust path if needed
+import EditBarInfoModal, { EditableField } from '@/src/components/general/editModal'; // Adjust path if needed
 import DisplayField from '@/src/components/general/display-field';
 
 export type Bar = Database['public']['Tables']['bars']['Row'];
