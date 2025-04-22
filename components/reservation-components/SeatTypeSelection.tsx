@@ -1,112 +1,165 @@
 import React from 'react';
-import { View, Text, Pressable, Image } from 'react-native';
-import { Sofa, Users, Crown } from 'lucide-react-native';
+import { View, Text, Pressable, ActivityIndicator } from 'react-native';
+// Import necessary icons
+import { Sofa, BarChart3, Crown, Users, AlertCircle, LucideProps, XCircle } from 'lucide-react-native';
 
-type SeatTypeSelectionProps = {
-  selectedSeatType: 'table' | 'bar' | 'vip' | null;
-  onSeatTypeChange: (seatType: 'table' | 'bar' | 'vip') => void;
+// Define the structure expected for each seat type's details
+export type SeatDetails = {
+  type: SeatOptionType;
+  remainingCount: number;
+  minPeople: number;
+  maxPeople: number;
 };
 
+// Define the possible seat type values
+type SeatOptionType = 'table' | 'bar' | 'vip';
+
+// Define the props the component expects
+interface SeatTypeSelectionProps {
+  seatDetails: SeatDetails[] | null; // Array of details for ENABLED types, or null
+  isLoading: boolean;
+  error: string | null;
+  selectedSeatType: SeatOptionType | null;
+  partySize: number;
+  onSeatTypeChange: (seatType: SeatOptionType) => void;
+}
+
+// Base configuration for ALL potential seat types (rendering icons, labels)
+const allSeatOptionsConfig: { type: SeatOptionType; label: string; icon: React.FC<LucideProps> }[] = [
+  { type: 'table', label: 'Table', icon: Sofa },
+  { type: 'bar', label: 'Bar Seat', icon: BarChart3 },
+  { type: 'vip', label: 'VIP Area', icon: Crown },
+];
+
 const SeatTypeSelection: React.FC<SeatTypeSelectionProps> = ({
+  seatDetails,
+  isLoading,
+  error,
   selectedSeatType,
-  onSeatTypeChange
+  partySize,
+  onSeatTypeChange,
 }) => {
+
+  // --- Loading State ---
+  if (isLoading) {
+    return (
+      <View className="items-center justify-center py-10">
+        <ActivityIndicator size="large" color="#ff4d6d" />
+        <Text className="text-gray-400 mt-3">Checking seat availability...</Text>
+      </View>
+    );
+  }
+
+  // --- Error State ---
+  if (error) {
+    return (
+      <View className="bg-red-900/50 p-4 rounded-lg mb-4 border border-red-700">
+        <Text className="text-red-300 text-center">Error loading seat types: {error}</Text>
+      </View>
+    );
+  }
+
+  // --- Render Seat Options ---
   return (
     <View className="mb-6">
-      <Text className="text-lg font-semibold text-white mb-4">Select Seating Type</Text>
+      <Text className="text-lg font-semibold text-white mb-4">Choose Your Seating Area</Text>
+      <View className="space-y-3">
+        {allSeatOptionsConfig.map((baseOption) => {
+          // Find details fetched from API for this type
+          const detail = seatDetails?.find(d => d.type === baseOption.type);
 
+          // --- Determine Status ---
+          const isOfferedByBar = !!detail; // Was this type returned by the API (i.e., enabled)?
+          const remainingSeats = detail?.remainingCount ?? 0;
+          const minPeople = detail?.minPeople ?? 0;
+          const maxPeople = detail?.maxPeople ?? 0;
+          const fitsPartySize = isOfferedByBar ? (partySize >= minPeople && partySize <= maxPeople) : false;
+          const hasSeatsLeft = isOfferedByBar && remainingSeats > 0;
 
-      <Pressable
-        className={`mb-4 p-4 rounded-xl border ${
-          selectedSeatType === 'table'
-            ? 'border-[#ff4d6d] bg-[#ff4d6d]/10'
-            : 'border-[#2a2a35] bg-[#1f1f27]'
-        }`}
-        onPress={() => onSeatTypeChange('table')}
-      >
-        <View className="flex-row items-center mb-2">
-          <View className={`w-10 h-10 rounded-full items-center justify-center mr-3 ${
-            selectedSeatType === 'table' ? 'bg-[#ff4d6d]' : 'bg-[#2a2a35]'
-          }`}>
-            <Sofa size={20} color={selectedSeatType === 'table' ? "#fff" : "#9ca3af"} />
-          </View>
+          // --- Determine Disabled State ---
+          // Disable if: Not offered OR no seats left OR party size doesn't fit
+          const isDisabled = !isOfferedByBar || !hasSeatsLeft || !fitsPartySize;
 
-          <View className="flex-1">
-            <Text className={`text-lg font-medium ${
-              selectedSeatType === 'table' ? 'text-white' : 'text-white'
-            }`}>
-              Table
-            </Text>
-            <Text className="text-gray-400 mt-1">
-              Standard table seating for your party
-            </Text>
-          </View>
-        </View>
-      </Pressable>
+          const isSelected = selectedSeatType === baseOption.type;
+          const IconComponent = baseOption.icon;
 
+          // --- Determine Status Text & Styling ---
+          let statusText = '';
+          let statusColor = 'text-gray-500'; // Default for unavailable info
+          let StatusIcon = XCircle;
 
-      <Pressable
-        className={`mb-4 p-4 rounded-xl border ${
-          selectedSeatType === 'bar'
-            ? 'border-[#ff4d6d] bg-[#ff4d6d]/10'
-            : 'border-[#2a2a35] bg-[#1f1f27]'
-        }`}
-        onPress={() => onSeatTypeChange('bar')}
-      >
-        <View className="flex-row items-center mb-2">
-          <View className={`w-10 h-10 rounded-full items-center justify-center mr-3 ${
-            selectedSeatType === 'bar' ? 'bg-[#ff4d6d]' : 'bg-[#2a2a35]'
-          }`}>
-            <Users size={20} color={selectedSeatType === 'bar' ? "#fff" : "#9ca3af"} />
-          </View>
+          if (isOfferedByBar) {
+            if (hasSeatsLeft) {
+              if (fitsPartySize) {
+                // Available and fits party size
+                statusText = `${remainingSeats} Seat${remainingSeats !== 1 ? 's' : ''} Left`;
+                statusColor = 'text-green-400';
+                // No specific icon needed here, just count
+              } else {
+                // Available but doesn't fit party size (will be disabled)
+                statusText = `Fits ${minPeople}-${maxPeople}`;
+                statusColor = 'text-amber-400'; // Use warning color
+                StatusIcon = AlertCircle;
+              }
+            } else {
+              // Offered but no seats left (will be disabled)
+              statusText = 'Fully Booked';
+              statusColor = 'text-red-400';
+            }
+          } else {
+            // Not offered by the bar at all
+            statusText = 'Not Offered';
+            statusColor = 'text-gray-500';
+          }
 
-          <View className="flex-1">
-            <Text className={`text-lg font-medium ${
-              selectedSeatType === 'bar' ? 'text-white' : 'text-white'
-            }`}>
-              Bar
-            </Text>
-            <Text className="text-gray-400 mt-1">
-              Seating at the bar counter
-            </Text>
-          </View>
-        </View>
-      </Pressable>
-
-
-      <Pressable
-        className={`mb-4 p-4 rounded-xl border ${
-          selectedSeatType === 'vip'
-            ? 'border-[#ff4d6d] bg-[#ff4d6d]/10'
-            : 'border-[#2a2a35] bg-[#1f1f27]'
-        }`}
-        onPress={() => onSeatTypeChange('vip')}
-      >
-        <View className="flex-row items-center mb-2">
-          <View className={`w-10 h-10 rounded-full items-center justify-center mr-3 ${
-            selectedSeatType === 'vip' ? 'bg-[#ff4d6d]' : 'bg-[#2a2a35]'
-          }`}>
-            <Crown size={20} color={selectedSeatType === 'vip' ? "#fff" : "#9ca3af"} />
-          </View>
-
-          <View className="flex-1">
-            <Text className={`text-lg font-medium ${
-              selectedSeatType === 'vip' ? 'text-white' : 'text-white'
-            }`}>
-              VIP
-            </Text>
-            <Text className="text-gray-400 mt-1">
-              Premium seating in a private area
-            </Text>
-          </View>
-        </View>
-      </Pressable>
-
-
-      <View className="bg-[#1f1f27] p-4 rounded-xl mt-2">
-        <Text className="text-gray-300">
-          VIP seating includes priority service, complimentary welcome drinks, and a dedicated server for your party.
-        </Text>
+          return (
+            <Pressable
+              key={baseOption.type}
+              disabled={isDisabled}
+              onPress={() => onSeatTypeChange(baseOption.type)}
+              className={`
+                p-4 rounded-xl border
+                ${isSelected ? 'bg-[#ff4d6d]/20 border-[#ff4d6d]' : 'bg-[#1f1f27] border-transparent'}
+                ${isDisabled ? 'opacity-50 bg-gray-800/60 border-gray-700' : ''}
+                ${!isDisabled && !isSelected ? 'active:bg-[#2a2a33]' : ''}
+              `}
+            >
+              <View className="flex-row items-center">
+                 <IconComponent
+                   size={24}
+                   // Adjust disabled color slightly more muted
+                   color={isDisabled ? '#666' : (isSelected ? '#ff4d6d' : '#e0e0e0')}
+                   className="mr-4"
+                 />
+                 <View className="flex-1">
+                    <Text
+                      className={`text-base font-medium ${isDisabled ? 'text-gray-500' : (isSelected ? 'text-[#ff4d6d]' : 'text-white')}`}
+                    >
+                      {baseOption.label}
+                    </Text>
+                    {/* Sub-details / Status row */}
+                    <View className="flex-row items-center mt-1 flex-wrap">
+                        {/* Show Status Icon based on logic */}
+                        {(isDisabled || (hasSeatsLeft && !fitsPartySize)) && // Show icon for unavailable/warning states
+                            <StatusIcon size={12} color={isDisabled ? '#999' : '#facc15'} className="mr-1"/>
+                        }
+                         {/* Show Status Text */}
+                        <Text className={`text-xs mr-3 ${statusColor}`}>
+                            {statusText}
+                        </Text>
+                         {/* Show Min/Max People only if offered by bar */}
+                         {isOfferedByBar && (
+                            <View className="flex-row items-center mr-3">
+                                <Users size={12} color="#a0a0a0" className="mr-1"/>
+                                <Text className="text-xs text-gray-400">{minPeople}-{maxPeople}</Text>
+                            </View>
+                         )}
+                    </View>
+                 </View>
+              </View>
+            </Pressable>
+          );
+        })}
       </View>
     </View>
   );
