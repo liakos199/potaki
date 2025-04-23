@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { View, Text, Pressable, ScrollView, ActivityIndicator } from 'react-native';
 import { Wine, Plus, Minus } from 'lucide-react-native';
 import { supabase } from '@/src/lib/supabase';
-
+// TODO - ADDED ONE EXTRA COLUMN NAMED  : restrictions
 type DrinkOption = {
   id: string;
   name: string | null;

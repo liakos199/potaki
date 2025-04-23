@@ -91,10 +91,31 @@ const BarOptionsScreen = (): JSX.Element | null => {
           accessibilityRole="button"
           accessibilityLabel="Edit Bar Info"
           activeOpacity={0.85}
-          onPress={() => router.push(`/(admin)/bar/${barId}/edit`)}
+          onPress={() => router.push(`/(admin)/bar/${barId}/info`)}
         >
           <Text className="text-white font-medium">Manage Bar Information</Text>
         </TouchableOpacity>
+        
+        <TouchableOpacity
+          className="bg-green-600 px-6 py-4 rounded-lg items-center"
+          accessibilityRole="button"
+          accessibilityLabel="Edit Bar Hours"
+          activeOpacity={0.85}
+          onPress={() => router.push(`/(admin)/bar/${barId}/hours`)}
+        >
+          <Text className="text-white font-medium">Manage Bar Hours</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          className="bg-green-600 px-6 py-4 rounded-lg items-center"
+          accessibilityRole="button"
+          accessibilityLabel="Edit Bar Seats"
+          activeOpacity={0.85}
+          onPress={() => router.push(`/(admin)/bar/${barId}/seats`)}
+        >
+          <Text className="text-white font-medium">Manage Bar Seats</Text>
+        </TouchableOpacity>
+
         <TouchableOpacity
           className="bg-green-600 px-6 py-4 rounded-lg items-center"
           accessibilityRole="button"

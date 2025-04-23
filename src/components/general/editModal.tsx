@@ -1,8 +1,17 @@
 import React, { useEffect } from 'react';
-import { Modal, View, Text, TouchableOpacity, Platform, ScrollView, ActivityIndicator } from 'react-native';
+import {
+  Modal,
+  View,
+  Text,
+  TouchableOpacity,
+  Platform,
+  ScrollView,
+  ActivityIndicator,
+  // KeyboardAvoidingView, // Keep in mind if needed
+} from 'react-native';
 import { useForm, SubmitHandler } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { X, AlertCircle } from 'lucide-react-native'; // Added AlertCircle
+import { X, AlertCircle } from 'lucide-react-native';
 
 import {
   Bar,
@@ -10,8 +19,7 @@ import {
   BarFormValues,
   FormInput,
   FormSwitch
-} from '../../features/owner-components/bar-info-section'; // Ensure path is correct
-import SaveButton from './SaveButton';
+} from '../../features/owner-components/bar-info-section'; // Adjust path
 
 export type EditableField = keyof BarFormValues;
 
@@ -26,7 +34,7 @@ const fieldHelperText: { [key in EditableField]?: { purpose: string; format?: st
   live: { purpose: "Controls if the bar appears in public listings.", format: "'Live' means visible, 'Not Live' means hidden." },
 };
 
-type myModalProps = {
+type EditModalProps = {
   visible: boolean;
   onClose: () => void;
   onSave: (data: Partial<BarFormValues>) => Promise<void>;
@@ -35,7 +43,7 @@ type myModalProps = {
   isSaving: boolean;
 };
 
-const myModal: React.FC<myModalProps> = ({
+const EditModal: React.FC<EditModalProps> = ({
   visible,
   onClose,
   onSave,
@@ -56,14 +64,17 @@ const myModal: React.FC<myModalProps> = ({
   useEffect(() => {
     if (visible && barData) {
        const defaultValues: BarFormValues = {
-           name: barData.name ?? '', address: barData.address ?? '',
+           name: barData.name ?? '',
+           address: barData.address ?? '',
            location: typeof barData.location === 'string' ? barData.location : barData.location ? JSON.stringify(barData.location) : '',
-           description: barData.description ?? '', phone: barData.phone ?? '', website: barData.website ?? '',
+           description: barData.description ?? '',
+           phone: barData.phone ?? '',
+           website: barData.website ?? '',
            reservation_hold_until: barData.reservation_hold_until ? barData.reservation_hold_until.substring(0, 5) : '',
            live: barData.live ?? false,
        };
       reset(defaultValues);
-    } else {
+    } else if (!visible) {
        reset({ name: '', address: '', location: '', description: '', phone: '', website: '', reservation_hold_until: '', live: false });
     }
   }, [visible, barData, reset]);
@@ -71,38 +82,49 @@ const myModal: React.FC<myModalProps> = ({
   const onSubmit: SubmitHandler<BarFormValues> = async (data) => {
     if (!editingField) return;
     const updatedValue = { [editingField]: data[editingField] };
-    try { await onSave(updatedValue); } catch (error) {/* Handled by parent */}
+    try {
+        await onSave(updatedValue);
+    } catch (error) {
+        console.error("Save failed in modal:", error);
+    }
   };
 
-  const renderHelperText = () => {
-    if (!editingField) return null;
-    const helper = fieldHelperText[editingField];
+  const renderHelperText = (field: EditableField) => {
+    const helper = fieldHelperText[field];
     if (!helper) return null;
     return (
-      <View className="mt-1.5 px-1">
-         <Text className="text-xs text-gray-500">
+      <View className="mt-2 px-1">
+         <Text className="text-sm text-gray-400">
            {helper.purpose}
-           {helper.format && <Text className="text-gray-400"> {helper.format}</Text>}
+           {helper.format && <Text className="text-gray-500"> {helper.format}</Text>}
          </Text>
       </View>
     );
   };
 
-   const renderErrorText = () => {
-        if (!editingField || !errors[editingField]) return null;
-        return (
-            <View className="mt-1 px-1 flex-row items-center">
-                <AlertCircle size={12} className="text-red-500 mr-1" />
-                <Text className="text-xs text-red-600">{String(errors[editingField]?.message)}</Text>
-            </View>
-        );
-   }
+  const renderErrorText = (field: EditableField) => {
+    if (!errors[field]) return null;
+    return (
+      <View className="mt-1.5 px-1 flex-row items-center">
+        <AlertCircle size={14} color="#f87171" className="mr-1.5" />
+        <Text className="text-sm text-red-400">{String(errors[field]?.message)}</Text>
+      </View>
+    );
+  }
 
-  const renderInputField = () => {
-    if (!editingField || !barData) return ( <View className="py-8 items-center"><ActivityIndicator/></View> );
+  const renderContent = () => {
+    if (!editingField || !barData) {
+      return (
+        <View className="py-12 items-center">
+          <ActivityIndicator size="large" color="#ff4d6d" />
+        </View>
+      );
+    }
+
     let inputComponent: React.ReactNode = null;
 
     switch (editingField) {
+      // Cases remain the same...
       case 'name':
         inputComponent = <FormInput label="Bar Name" name="name" control={control} errors={errors} placeholder="Enter bar name" autoCapitalize="words" />;
         break;
@@ -122,22 +144,53 @@ const myModal: React.FC<myModalProps> = ({
         inputComponent = <FormInput label="Website" name="website" control={control} errors={errors} placeholder="https://example.com" keyboardType="url" autoCapitalize="none" />;
         break;
       case 'reservation_hold_until':
-        inputComponent = <FormInput label="Reservation Hold Time (HH:MM)" name="reservation_hold_until" control={control} errors={errors} placeholder="e.g., 17:00" keyboardType={Platform.OS === 'ios' ? 'numbers-and-punctuation' : 'numeric'} autoCapitalize="none" />;
+        inputComponent = <FormInput label="Reservation Hold Time (HH:MM)" name="reservation_hold_until" control={control} errors={errors} placeholder="e.g., 17:00" keyboardType={Platform.OS === 'ios' ? 'numbers-and-punctuation' : 'numeric'} autoCapitalize="none" maxLength={5} />;
         break;
       case 'live':
         inputComponent = <FormSwitch label="Bar Status" name="live" control={control} labelDescription="Visible to public?" />;
         break;
       default:
         const exhaustiveCheck: never = editingField;
-        inputComponent = <Text className="text-red-500 text-xs">Unknown field: {exhaustiveCheck}</Text>;
+        inputComponent = <Text className="text-red-400 text-sm">Unknown field type: {exhaustiveCheck}</Text>;
     }
 
     return (
-        <View className="mb-3">
-            {inputComponent}
-            {renderErrorText()}
-            {renderHelperText()}
+      <>
+        <View className="mb-4">
+          {inputComponent}
+          {renderErrorText(editingField)}
+          {renderHelperText(editingField)}
         </View>
+
+        {/* --- Button Row --- */}
+        {/* Use flex-row, items-center for alignment. No justify- needed as flex-1 handles width */}
+        <View className="flex-row items-center mt-8 mb-6">
+          {/* Cancel Button: Added flex-1 to grow, added flex items-center justify-center */}
+          <TouchableOpacity
+            onPress={onClose}
+            disabled={isSaving}
+            className={`flex-1 py-3 rounded-lg border border-[#5a5a65] bg-[#3a3a45] mr-2 flex items-center justify-center ${isSaving ? 'opacity-60' : 'active:bg-[#4a4a55]'}`}
+            // Note: mr-2 provides half the gap, ml-2 on the other button provides the other half
+          >
+            <Text className="text-base font-medium text-gray-200 text-center">Cancel</Text>
+          </TouchableOpacity>
+
+          {/* Save Button: Added flex-1 to grow, added flex items-center justify-center */}
+          <TouchableOpacity
+            onPress={handleSubmit(onSubmit)}
+            disabled={!isDirty || isSaving}
+            className={`flex-1 py-3 rounded-lg bg-[#ff4d6d] ml-2 flex items-center justify-center ${(!isDirty || isSaving) ? 'opacity-60' : 'active:bg-[#e64463]'}`}
+             // Note: ml-2 provides half the gap
+          >
+            {isSaving ? (
+              <ActivityIndicator size="small" color="#FFFFFF" />
+            ) : (
+              <Text className="text-base font-medium text-white text-center">Save</Text>
+            )}
+          </TouchableOpacity>
+        </View>
+        {/* --- End Button Row --- */}
+      </>
     );
   };
 
@@ -148,6 +201,7 @@ const myModal: React.FC<myModalProps> = ({
     return `Edit ${title}`;
   };
 
+  // Modal structure remains the same
   return (
     <Modal
       animationType="slide"
@@ -156,36 +210,32 @@ const myModal: React.FC<myModalProps> = ({
       visible={visible}
       onRequestClose={onClose}
     >
-      <View className="flex-1 bg-white">
-        <View className="flex-row justify-between items-center p-4 border-b border-gray-200">
-          <Text className="text-base font-medium text-gray-800">{getModalTitle()}</Text>
-          <TouchableOpacity onPress={onClose} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} className="p-1">
-            <X size={20} className="text-gray-500" />
+      <View className="flex-1 bg-[#1f1f27]">
+        <View className="flex-row justify-between items-center p-4 pb-3 border-b border-[#2a2a35]">
+          <Text className="text-xl font-semibold text-white">{getModalTitle()}</Text>
+          <TouchableOpacity
+            onPress={onClose}
+            hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }}
+            className="p-2 rounded-full bg-[#2a2a35] active:bg-[#3a3a45]"
+          >
+            <X size={22} className="text-gray-300" />
           </TouchableOpacity>
         </View>
 
-        <ScrollView className="flex-1" keyboardShouldPersistTaps="handled" contentContainerStyle={{ padding: 16 }}>
-            {renderInputField()}
+        <ScrollView
+          keyboardShouldPersistTaps="handled"
+          contentContainerStyle={{
+              paddingHorizontal: 16, // Keep horizontal padding for the overall scroll view
+              paddingTop: 20,
+              paddingBottom: 40
+          }}
+          className="flex-1"
+        >
+          {renderContent()}
         </ScrollView>
-
-        <View className="px-4 py-3 border-t border-gray-200 bg-white flex-row justify-end items-center space-x-3">
-           <TouchableOpacity
-              onPress={onClose}
-              disabled={isSaving}
-              className={`py-2 px-4 rounded-md border border-gray-300 bg-white ${isSaving ? 'opacity-60' : 'hover:bg-gray-50 active:bg-gray-100'}`}
-            >
-              <Text className="text-sm font-medium text-gray-700">Cancel</Text>
-            </TouchableOpacity>
-          <SaveButton
-            title="Save Changes"
-            onPress={handleSubmit(onSubmit)}
-            loading={isSaving}
-            disabled={!isDirty || isSaving}
-          />
-        </View>
       </View>
     </Modal>
   );
 };
 
-export default myModal;
+export default EditModal;

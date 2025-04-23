@@ -178,6 +178,12 @@ const NewReservationScreen = (): JSX.Element => {
   const [availableSeatDetails, setAvailableSeatDetails] = useState<SeatDetails[] | null>(null);
   const [seatTypesLoading, setSeatTypesLoading] = useState<boolean>(false);
   const [seatTypesError, setSeatTypesError] = useState<string | null>(null);
+  const selectedSeatDetails = useMemo(() => {
+    if (!selectedSeatType || !availableSeatDetails) {
+        return null;
+    }
+    return availableSeatDetails.find(detail => detail.type === selectedSeatType);
+}, [selectedSeatType, availableSeatDetails]);
 
   // Submission State
   const [savingReservation, setSavingReservation] = useState(false);
@@ -485,14 +491,17 @@ const NewReservationScreen = (): JSX.Element => {
             />
           )}
 
-          {currentStep === ReservationStep.PARTY_SIZE && (
-            <PartySizeSelection
-              selectedPartySize={selectedPartySize}
-              onPartySizeChange={setSelectedPartySize}
-              // You could pass min/max dynamically based on selectedSeatType if desired
-              // For now, it likely handles its own internal validation or uses fixed bounds
-            />
-          )}
+{currentStep === ReservationStep.PARTY_SIZE && (
+  <PartySizeSelection
+    selectedPartySize={selectedPartySize}
+    onPartySizeChange={setSelectedPartySize}
+    // Pass the min/max limits for the selected seat type
+    // Provide defaults (e.g., 1-10) if no seat type is selected yet or details missing
+    minSize={selectedSeatDetails?.minPeople ?? 1}
+    maxSize={selectedSeatDetails?.maxPeople ?? 10} // Use a reasonable default max
+    selectedSeatTypeLabel={selectedSeatType ? capitalize(selectedSeatType) : null}
+  />
+)}
 
           {currentStep === ReservationStep.DRINKS && barDetails && (
             <DrinkSelection

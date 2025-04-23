@@ -357,6 +357,7 @@ export type Database = {
           id: string
           max_people: number
           min_people: number
+          restrictions: Json | null
           type: Database["public"]["Enums"]["seat_option_type"]
         }
         Insert: {
@@ -366,6 +367,7 @@ export type Database = {
           id?: string
           max_people: number
           min_people: number
+          restrictions?: Json | null
           type: Database["public"]["Enums"]["seat_option_type"]
         }
         Update: {
@@ -375,6 +377,7 @@ export type Database = {
           id?: string
           max_people?: number
           min_people?: number
+          restrictions?: Json | null
           type?: Database["public"]["Enums"]["seat_option_type"]
         }
         Relationships: [
