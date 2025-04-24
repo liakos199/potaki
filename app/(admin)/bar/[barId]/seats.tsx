@@ -8,18 +8,17 @@ import {
     Switch,
     ActivityIndicator,
     StyleSheet,
-    KeyboardAvoidingView, // Keep import
-    Platform,          // Keep import
-    Dimensions,        // Import Dimensions for potential adjustments if needed
+    KeyboardAvoidingView,
+    Platform,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context'; // Import for safe area handling
 import { useLocalSearchParams } from 'expo-router';
-import { ChevronDown, ChevronUp, Save, RotateCcw, Wine, Users, DollarSign, AlertCircle } from 'lucide-react-native';
+import { ChevronDown, ChevronUp, Save, RotateCcw, Wine, Users, DollarSign, AlertCircle, Power, PowerOff } from 'lucide-react-native'; // Added Power icons
 import cloneDeep from 'lodash/cloneDeep';
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { supabase } from "@/src/lib/supabase"; // Adjust path
-import { Constants } from "@/src/lib/database.types"; // Adjust path
-import { useToast } from "@/src/components/general/Toast"; // Adjust path
+import { supabase } from "@/src/lib/supabase";
+import { Constants } from "@/src/lib/database.types";
+import { useToast } from "@/src/components/general/Toast";
 
 // --- Types (Keep as is) ---
 const seatOptionTypes = Constants.public.Enums.seat_option_type;
@@ -44,7 +43,7 @@ export type SeatOption = {
 
 export type SeatOptionFormValues = {
   type: SeatOptionType;
-  enabled: boolean;
+  enabled: boolean; // This now represents the *actual* enabled state for the DB
   available_count: number | null;
   min_people: number | null;
   max_people: number | null;
@@ -57,12 +56,14 @@ export type SeatOptionFormValues = {
   };
 };
 
-// --- Helper Functions (Keep as is) ---
+// --- Helper Functions ---
+
+// Convert DB to Form: Initialize 'enabled' from DB
 const convertDbToFormValues = (dbOption: SeatOption): SeatOptionFormValues => {
   const dbRestrictions = dbOption.restrictions || {};
   return {
     type: dbOption.type,
-    enabled: dbOption.enabled,
+    enabled: dbOption.enabled, // Use DB enabled state
     available_count: dbOption.available_count,
     min_people: dbOption.min_people,
     max_people: dbOption.max_people,
@@ -76,9 +77,10 @@ const convertDbToFormValues = (dbOption: SeatOption): SeatOptionFormValues => {
   };
 };
 
+// Create Default: Default 'enabled' to true when first configured
 const createDefaultFormValues = (type: SeatOptionType): SeatOptionFormValues => ({
   type: type,
-  enabled: false,
+  enabled: true, // Default to enabled when first configured
   available_count: 0,
   min_people: null,
   max_people: null,
@@ -103,94 +105,107 @@ const getEffectiveMinBottles = (restrictions: SeatOptionFormValues['restrictions
     : null;
 };
 
+// areStatesEqual: Now compares the full form state (including 'enabled') to the DB state
 const areStatesEqual = (formState: SeatOptionFormValues | null | undefined, dbState: SeatOption | null | undefined): boolean => {
-    if (formState && dbState) {
-        const dbRestrictions = dbState.restrictions || {};
-        const formRestrictions = formState.restrictions;
-        const effectiveDbMinConsumption = dbRestrictions.min_consumption ?? null;
-        const effectiveFormMinConsumption = getEffectiveMinConsumption(formRestrictions);
-        const effectiveDbMinBottles = dbRestrictions.min_bottles ?? null;
-        const effectiveFormMinBottles = getEffectiveMinBottles(formRestrictions);
-        return (
-            formState.enabled === dbState.enabled &&
-            (formState.available_count ?? 0) === (dbState.available_count ?? 0) &&
-            (formState.min_people ?? 0) === (dbState.min_people ?? 0) &&
-            (formState.max_people ?? 0) === (dbState.max_people ?? 0) &&
-            formRestrictions.require_bottle_drink === (dbRestrictions.require_bottle_drink ?? false) &&
-            effectiveFormMinConsumption === effectiveDbMinConsumption &&
-            effectiveFormMinBottles === effectiveDbMinBottles
-        );
-    }
-    // Handle comparison when one state exists but the other doesn't, considering default state
-    if (formState && !dbState) {
-        // If form is enabled but no DB record, they are not equal
-        if (formState.enabled) return false;
-        // If form is not enabled and no DB record, compare form to default disabled state
-        const defaultState = createDefaultFormValues(formState.type);
-        // Need to compare against a representation of the default state as if it were a dbState
-        return areStatesEqual(formState, { id: '', bar_id: '', type: formState.type, enabled: defaultState.enabled, available_count: defaultState.available_count ?? 0, min_people: defaultState.min_people ?? 0, max_people: defaultState.max_people ?? 0, restrictions: null });
-    }
-    if (!formState && dbState) {
-        // If no form state but DB record exists, they are not equal (unless DB record is effectively default disabled?) - Safer to say not equal.
-        return false;
-    }
-    // If both are null/undefined, they are equal
-    return true;
+    if (!formState && !dbState) return true; // Both null/undefined
+    if (!formState || !dbState) return false; // One exists, the other doesn't
+
+    // Compare all fields, including 'enabled'
+    const dbRestrictions = dbState.restrictions || {};
+    const formRestrictions = formState.restrictions;
+    const effectiveDbMinConsumption = dbRestrictions.min_consumption ?? null;
+    const effectiveFormMinConsumption = getEffectiveMinConsumption(formRestrictions);
+    const effectiveDbMinBottles = dbRestrictions.min_bottles ?? null;
+    const effectiveFormMinBottles = getEffectiveMinBottles(formRestrictions);
+
+    return (
+        formState.enabled === dbState.enabled && // Compare enabled status
+        (formState.available_count ?? 0) === (dbState.available_count ?? 0) &&
+        (formState.min_people ?? 0) === (dbState.min_people ?? 0) &&
+        (formState.max_people ?? 0) === (dbState.max_people ?? 0) &&
+        formRestrictions.require_bottle_drink === (dbRestrictions.require_bottle_drink ?? false) &&
+        effectiveFormMinConsumption === effectiveDbMinConsumption &&
+        effectiveFormMinBottles === effectiveDbMinBottles
+    );
 };
 
 
-// --- Validation Function (Keep as is) ---
-const validateFormValues = (formValues: SeatOptionFormValues): string[] => {
+// --- Validation Function ---
+// Validation needs context: only validate thoroughly if configured and enabled
+// --- START OF FIX 1: Updated validateFormValues ---
+const validateFormValues = (formValues: SeatOptionFormValues, isConfigured: boolean): string[] => {
     const errors: string[] = [];
+    // Only run validations if the type is configured
+    if (!isConfigured) {
+        return errors; // No validation needed if not configured
+    }
+
     const typeName = formValues.type.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
 
-    if (formValues.enabled && (formValues.available_count === null || formValues.available_count <= 0)) {
-        errors.push(`${typeName}: Available count must be > 0 when enabled.`);
+    // Only validate counts/restrictions if the *internal* enabled switch is ON
+    if (formValues.enabled) {
+        if (formValues.available_count === null || formValues.available_count <= 0) {
+            errors.push(`${typeName}: Available count must be > 0 when enabled.`);
+        }
+        if (formValues.restrictions.min_consumption_enabled && (formValues.restrictions.min_consumption === null || formValues.restrictions.min_consumption <= 0)) {
+            errors.push(`${typeName}: Min consumption amount must be > 0 when enabled.`);
+        }
+        if (formValues.restrictions.min_bottles_enabled && (formValues.restrictions.min_bottles === null || formValues.restrictions.min_bottles <= 0)) {
+            errors.push(`${typeName}: Min bottles amount must be > 0 when enabled.`);
+        }
     }
+
+    // These validations apply regardless of the internal enabled switch (if configured)
     const minPpl = formValues.min_people;
     const maxPpl = formValues.max_people;
-    if (minPpl !== null && maxPpl !== null && maxPpl < minPpl) {
-        errors.push(`${typeName}: Max people (${maxPpl}) cannot be < Min people (${minPpl}).`);
-    }
-    if (formValues.restrictions.min_consumption_enabled && (formValues.restrictions.min_consumption === null || formValues.restrictions.min_consumption <= 0)) {
-        errors.push(`${typeName}: Min consumption amount must be > 0 when enabled.`);
-    }
-    if (formValues.restrictions.min_bottles_enabled && (formValues.restrictions.min_bottles === null || formValues.restrictions.min_bottles <= 0)) {
-        errors.push(`${typeName}: Min bottles amount must be > 0 when enabled.`);
-    }
+
+    // Check min/max consistency
+    if (minPpl !== null) { // If Min People is set...
+         if (maxPpl === null) { // ...but Max People is not...
+             errors.push(`${typeName}: Max people is required when Min people is set.`);
+         } else if (maxPpl < minPpl) { // ...or Max People is less than Min People...
+             errors.push(`${typeName}: Max people (${maxPpl}) cannot be < Min people (${minPpl}).`);
+         }
+     }
+
     return errors;
 };
+// --- END OF FIX 1 ---
 
 
-// --- SeatOptionForm Props Interface (Keep as is) ---
+// --- SeatOptionForm Props Interface ---
 interface SeatOptionFormProps {
   values: SeatOptionFormValues;
   onChange: (values: SeatOptionFormValues) => void;
-  isDisabled: boolean;
+  isDisabled: boolean; // Renamed: This now means "Is the entire form disabled because not configured?"
   isAvailableCountInvalid: boolean;
   isMaxPeopleInvalid: boolean;
   isMinConsumptionAmountInvalid: boolean;
   isMinBottlesAmountInvalid: boolean;
+  originalRecordExists: boolean; // NEW PROP: To control the "Enabled" switch visibility/state
 }
 
-// --- SeatOptionForm Component (Keep as is) ---
+// --- SeatOptionForm Component ---
 const SeatOptionForm = ({
   values,
   onChange,
-  isDisabled,
+  isDisabled, // Is the whole form disabled (not configured)?
   isAvailableCountInvalid,
   isMaxPeopleInvalid,
   isMinConsumptionAmountInvalid,
   isMinBottlesAmountInvalid,
+  originalRecordExists, // Does the DB record exist?
 }: SeatOptionFormProps) => {
 
-  const updateField = (field: keyof Omit<SeatOptionFormValues, 'restrictions' | 'type'>, value: any) => {
+  // Keep updateField and updateRestriction as they are, they modify the 'values' object
+   const updateField = (field: keyof Omit<SeatOptionFormValues, 'restrictions' | 'type'>, value: any) => {
      let processedValue = value;
-      if (field === 'available_count' || field === 'min_people' || field === 'max_people') {
+      // Special handling for the 'enabled' field (controlled by the internal switch)
+      if (field === 'enabled') {
+          processedValue = !!value;
+      } else if (field === 'available_count' || field === 'min_people' || field === 'max_people') {
           const cleaned = String(value).replace(/[^0-9]/g, "");
           processedValue = cleaned === "" ? null : Math.max(0, parseInt(cleaned, 10));
-      } else if (field === 'enabled') {
-          processedValue = !!value;
       }
     onChange({ ...values, [field]: processedValue });
   };
@@ -214,58 +229,97 @@ const SeatOptionForm = ({
   const disabledInputStyle = isDisabled ? 'opacity-50' : '';
 
   return (
-    <View className="pt-4 px-4 border-t border-white/10">
-      {/* Available Count */}
-      <View className={`mb-4 ${disabledInputStyle}`}>
-        <Text className="text-sm text-white mb-2">Available Count *</Text>
-        <View className={`bg-[#2A2A35] rounded-lg border ${isAvailableCountInvalid && !isDisabled ? 'border-red-500' : 'border-white/10'}`}>
-          <TextInput className="text-white p-3 text-base" keyboardType="numeric" value={values.available_count?.toString() ?? ''} onChangeText={(text) => updateField('available_count', text)} placeholder="0" placeholderTextColor="#6C7A93" editable={!isDisabled}/>
-        </View>
-        {isAvailableCountInvalid && !isDisabled && (<View className="flex-row items-center mt-1"><AlertCircle size={12} color="#f87171" /><Text className="text-red-400 text-xs ml-1 w-full">Value must be greater than 0.</Text></View>)}
-      </View>
+    // Entire form respects the isDisabled prop (passed from whether it's configured)
+    <View className={`pt-4 px-4 border-t border-white/10 ${isDisabled ? 'opacity-60' : ''}`}>
 
-      {/* Min/Max People */}
-      <View className={`flex-row mb-6 ${disabledInputStyle}`}>
-        <View className="flex-1 mr-2">
-            <Text className="text-sm text-white mb-2">Min People</Text>
-            <View className="bg-[#2A2A35] rounded-lg border border-white/10"><TextInput className="text-white p-3 text-base" keyboardType="numeric" value={values.min_people?.toString() ?? ''} onChangeText={(text) => updateField('min_people', text)} placeholder="Any" placeholderTextColor="#6C7A93" editable={!isDisabled} /></View>
-        </View>
-        <View className="flex-1 ml-2">
-          <Text className="text-sm text-white mb-2">Max People</Text>
-           <View className={`bg-[#2A2A35] rounded-lg border ${isMaxPeopleInvalid && !isDisabled ? 'border-red-500' : 'border-white/10'}`}>
-            <TextInput className="text-white p-3 text-base" keyboardType="numeric" value={values.max_people?.toString() ?? ''} onChangeText={(text) => updateField('max_people', text)} placeholder="Any" placeholderTextColor="#6C7A93" editable={!isDisabled} />
-          </View>
-          {isMaxPeopleInvalid && !isDisabled && (<View className="flex-row items-center mt-1"><AlertCircle size={12} color="#f87171" /><Text className="text-red-400 text-xs ml-1">Must be ≥ Min People.</Text></View>)}
-        </View>
-      </View>
+       {/* --- NEW "Enabled" Switch --- */}
+       <View className={`flex-row items-center justify-between mb-4 ${isDisabled ? 'opacity-50' : ''}`}>
+           <View className="flex-row items-center">
+               {values.enabled ? <Power size={16} color="#34d399" /> : <PowerOff size={16} color="#9ca3af" />}
+               <Text className={`text-sm ml-2 ${values.enabled ? 'text-white' : 'text-gray-400'}`}>
+                   {values.enabled ? 'Seat Option Enabled' : 'Seat Option Disabled'}
+               </Text>
+           </View>
+           <Switch
+               value={values.enabled}
+               // Use updateField directly to change the 'enabled' property in the form values
+               onValueChange={(v) => updateField('enabled', v)}
+               trackColor={{ false: '#374151', true: '#34d39940' }}
+               thumbColor={values.enabled ? '#34d399' : '#9ca3af'}
+               // This switch is disabled if the entire form is disabled (i.e., not configured)
+               disabled={isDisabled}
+               ios_backgroundColor="#374151"
+           />
+       </View>
+       {/* --- End NEW Switch --- */}
 
-      {/* Restrictions */}
-      <View className={`mb-1 ${disabledInputStyle}`}>
-        <Text className="text-base font-semibold text-white mb-4">Restrictions</Text>
-        <View className="flex-row items-center justify-between mb-4"><View className="flex-row items-center"><Wine size={16} color="#ff4d6d" className="mr-2" /><Text className="text-sm text-white ml-2">Require Bottle Service</Text></View><Switch value={values.restrictions.require_bottle_drink} onValueChange={(v) => updateRestriction('require_bottle_drink', v)} trackColor={{ false: '#2a2a35', true: '#ff4d6d40' }} thumbColor={values.restrictions.require_bottle_drink ? '#ff4d6d' : '#9ca3af'} disabled={isDisabled} ios_backgroundColor="#2a2a35" /></View>
-        <View className="flex-row items-center justify-between mb-4"><View className="flex-row items-center"><DollarSign size={16} color="#ff4d6d" className="mr-2" /><Text className="text-sm text-white ml-2">Minimum Consumption</Text></View><Switch value={values.restrictions.min_consumption_enabled} onValueChange={(v) => updateRestriction('min_consumption_enabled', v)} trackColor={{ false: '#2a2a35', true: '#ff4d6d40' }} thumbColor={values.restrictions.min_consumption_enabled ? '#ff4d6d' : '#9ca3af'} disabled={isDisabled} ios_backgroundColor="#2a2a35" /></View>
-        {values.restrictions.min_consumption_enabled && (
-          <View className={`mt-[-8px] mb-4 ml-6 ${isDisabled ? 'opacity-50' : ''}`}>
-            <Text className="text-xs text-gray-400 mb-1">Amount (€)</Text>
-            <View className={`bg-[#2A2A35] rounded-lg border ${isMinConsumptionAmountInvalid && !isDisabled ? 'border-red-500' : 'border-white/10'}`}>
-              <TextInput className="text-white p-3 text-base" keyboardType="numeric" value={values.restrictions.min_consumption?.toString() ?? ''} onChangeText={(text) => updateRestriction('min_consumption', text)} placeholder="e.g., 100" placeholderTextColor="#6C7A93" editable={!isDisabled}/>
-            </View>
-            {isMinConsumptionAmountInvalid && !isDisabled && (<View className="flex-row items-center mt-1"><AlertCircle size={12} color="#f87171" /><Text className="text-red-400 text-xs ml-1">Required when Min Consumption is enabled.</Text></View>)}
-          </View>
-        )}
-         <View className="flex-row items-center justify-between mb-4"><View className="flex-row items-center"><Wine size={16} color="#8b5cf6" className="mr-2" /><Text className="text-sm text-white ml-2">Minimum Bottles</Text></View><Switch value={values.restrictions.min_bottles_enabled} onValueChange={(v) => updateRestriction('min_bottles_enabled', v)} trackColor={{ false: '#2a2a35', true: '#8b5cf640' }} thumbColor={values.restrictions.min_bottles_enabled ? '#8b5cf6' : '#9ca3af'} disabled={isDisabled} ios_backgroundColor="#2a2a35" /></View>
-         {values.restrictions.min_bottles_enabled && (
+       {/* --- Existing Form Fields --- */}
+       {/* These fields respect isDisabled, but also consider internal 'values.enabled' for validation styles */}
+       <View className={`mb-4 ${disabledInputStyle}`}>
+         <Text className="text-sm text-white mb-2">Available Count *</Text>
+         {/* Validation border depends on internal 'enabled' state AND form being configured */}
+         <View className={`bg-[#2A2A35] rounded-lg border ${isAvailableCountInvalid && values.enabled && !isDisabled ? 'border-red-500' : 'border-white/10'}`}>
+           <TextInput className="text-white p-3 text-base" keyboardType="numeric" value={values.available_count?.toString() ?? ''} onChangeText={(text) => updateField('available_count', text)} placeholder="0" placeholderTextColor="#6C7A93" editable={!isDisabled}/>
+         </View>
+         {/* Error message depends on internal 'enabled' state AND form being configured */}
+         {isAvailableCountInvalid && values.enabled && !isDisabled && (<View className="flex-row items-center mt-1"><AlertCircle size={12} color="#f87171" /><Text className="text-red-400 text-xs ml-1 w-full">Value must be greater than 0 when enabled.</Text></View>)}
+       </View>
+
+       {/* Min/Max People */}
+       <View className={`flex-row mb-6 ${disabledInputStyle}`}>
+         <View className="flex-1 mr-2">
+             <Text className="text-sm text-white mb-2">Min People</Text>
+             <View className="bg-[#2A2A35] rounded-lg border border-white/10"><TextInput className="text-white p-3 text-base" keyboardType="numeric" value={values.min_people?.toString() ?? ''} onChangeText={(text) => updateField('min_people', text)} placeholder="Any" placeholderTextColor="#6C7A93" editable={!isDisabled} /></View>
+         </View>
+         <View className="flex-1 ml-2">
+           <Text className="text-sm text-white mb-2">Max People</Text>
+            <View className={`bg-[#2A2A35] rounded-lg border ${isMaxPeopleInvalid && !isDisabled ? 'border-red-500' : 'border-white/10'}`}>
+             <TextInput className="text-white p-3 text-base" keyboardType="numeric" value={values.max_people?.toString() ?? ''} onChangeText={(text) => updateField('max_people', text)} placeholder="Any" placeholderTextColor="#6C7A93" editable={!isDisabled} />
+           </View>
+           {/* --- START OF FIX 2: Updated Error Message for Max People --- */}
+           {isMaxPeopleInvalid && !isDisabled && (
+               <View className="flex-row items-center mt-1">
+                   <AlertCircle size={12} color="#f87171" />
+                   <Text className="text-red-400 text-xs ml-1 w-full">
+                       Required if Min is set & must be ≥ Min People.
+                   </Text>
+               </View>
+           )}
+           {/* --- END OF FIX 2 --- */}
+         </View>
+       </View>
+
+       {/* Restrictions */}
+       <View className={`mb-1 ${disabledInputStyle}`}>
+         <Text className="text-base font-semibold text-white mb-4">Restrictions</Text>
+         {/* Switches inside restrictions respect isDisabled */}
+         <View className="flex-row items-center justify-between mb-4"><View className="flex-row items-center"><Wine size={16} color="#ff4d6d" className="mr-2" /><Text className="text-sm text-white ml-2">Require Bottle Service</Text></View><Switch value={values.restrictions.require_bottle_drink} onValueChange={(v) => updateRestriction('require_bottle_drink', v)} trackColor={{ false: '#2a2a35', true: '#ff4d6d40' }} thumbColor={values.restrictions.require_bottle_drink ? '#ff4d6d' : '#9ca3af'} disabled={isDisabled} ios_backgroundColor="#2a2a35" /></View>
+         <View className="flex-row items-center justify-between mb-4"><View className="flex-row items-center"><DollarSign size={16} color="#ff4d6d" className="mr-2" /><Text className="text-sm text-white ml-2">Minimum Consumption</Text></View><Switch value={values.restrictions.min_consumption_enabled} onValueChange={(v) => updateRestriction('min_consumption_enabled', v)} trackColor={{ false: '#2a2a35', true: '#ff4d6d40' }} thumbColor={values.restrictions.min_consumption_enabled ? '#ff4d6d' : '#9ca3af'} disabled={isDisabled} ios_backgroundColor="#2a2a35" /></View>
+         {/* Text inputs respect isDisabled */}
+         {values.restrictions.min_consumption_enabled && (
            <View className={`mt-[-8px] mb-4 ml-6 ${isDisabled ? 'opacity-50' : ''}`}>
-             <Text className="text-xs text-gray-400 mb-1">Number of Bottles</Text>
-             <View className={`bg-[#2A2A35] rounded-lg border ${isMinBottlesAmountInvalid && !isDisabled ? 'border-red-500' : 'border-white/10'}`}>
-               <TextInput className="text-white p-3 text-base" keyboardType="numeric" value={values.restrictions.min_bottles?.toString() ?? ''} onChangeText={(text) => updateRestriction('min_bottles', text)} placeholder="e.g., 2" placeholderTextColor="#6C7A93" editable={!isDisabled}/>
+             <Text className="text-xs text-gray-400 mb-1">Amount (€)</Text>
+             {/* Validation border depends on internal restriction enabled state AND form being configured */}
+             <View className={`bg-[#2A2A35] rounded-lg border ${isMinConsumptionAmountInvalid && values.restrictions.min_consumption_enabled && !isDisabled ? 'border-red-500' : 'border-white/10'}`}>
+               <TextInput className="text-white p-3 text-base" keyboardType="numeric" value={values.restrictions.min_consumption?.toString() ?? ''} onChangeText={(text) => updateRestriction('min_consumption', text)} placeholder="e.g., 100" placeholderTextColor="#6C7A93" editable={!isDisabled}/>
              </View>
-             {isMinBottlesAmountInvalid && !isDisabled && (<View className="flex-row items-center mt-1"><AlertCircle size={12} color="#f87171" /><Text className="text-red-400 text-xs ml-1">Required when Min Bottles is enabled.</Text></View>)}
+             {/* Error message depends on internal restriction enabled state AND form being configured */}
+             {isMinConsumptionAmountInvalid && values.restrictions.min_consumption_enabled && !isDisabled && (<View className="flex-row items-center mt-1"><AlertCircle size={12} color="#f87171" /><Text className="text-red-400 text-xs ml-1">Required when Min Consumption is enabled.</Text></View>)}
            </View>
          )}
-      </View>
+          <View className="flex-row items-center justify-between mb-4"><View className="flex-row items-center"><Wine size={16} color="#8b5cf6" className="mr-2" /><Text className="text-sm text-white ml-2">Minimum Bottles</Text></View><Switch value={values.restrictions.min_bottles_enabled} onValueChange={(v) => updateRestriction('min_bottles_enabled', v)} trackColor={{ false: '#2a2a35', true: '#8b5cf640' }} thumbColor={values.restrictions.min_bottles_enabled ? '#8b5cf6' : '#9ca3af'} disabled={isDisabled} ios_backgroundColor="#2a2a35" /></View>
+          {values.restrictions.min_bottles_enabled && (
+            <View className={`mt-[-8px] mb-4 ml-6 ${isDisabled ? 'opacity-50' : ''}`}>
+              <Text className="text-xs text-gray-400 mb-1">Number of Bottles</Text>
+              <View className={`bg-[#2A2A35] rounded-lg border ${isMinBottlesAmountInvalid && values.restrictions.min_bottles_enabled && !isDisabled ? 'border-red-500' : 'border-white/10'}`}>
+                <TextInput className="text-white p-3 text-base" keyboardType="numeric" value={values.restrictions.min_bottles?.toString() ?? ''} onChangeText={(text) => updateRestriction('min_bottles', text)} placeholder="e.g., 2" placeholderTextColor="#6C7A93" editable={!isDisabled}/>
+              </View>
+              {isMinBottlesAmountInvalid && values.restrictions.min_bottles_enabled && !isDisabled && (<View className="flex-row items-center mt-1"><AlertCircle size={12} color="#f87171" /><Text className="text-red-400 text-xs ml-1">Required when Min Bottles is enabled.</Text></View>)}
+            </View>
+          )}
+       </View>
     </View>
-  );
+   );
 };
 
 
@@ -274,12 +328,11 @@ export default function Seats() {
   const { barId } = useLocalSearchParams<{ barId: string }>();
   const queryClient = useQueryClient();
   const toast = useToast();
-  // --- *** STATE CHANGE *** ---
-  // Replace single editingType with a Set to track multiple open drawers
-  // const [editingType, setEditingType] = useState<SeatOptionType | null>(null);
   const [openDrawers, setOpenDrawers] = useState<Set<SeatOptionType>>(new Set());
-  // --- *** END STATE CHANGE *** ---
-  const safeAreaInsets = useSafeAreaInsets(); // Get safe area insets
+  const safeAreaInsets = useSafeAreaInsets();
+
+  // --- NEW State: Track configured types (Main Switch state) ---
+  const [configuredTypes, setConfiguredTypes] = useState<Set<SeatOptionType>>(new Set());
 
   // --- Data Fetching (Keep as is) ---
   const {
@@ -300,7 +353,7 @@ export default function Seats() {
     gcTime: 10 * 60 * 1000,
   });
 
-  // --- State (Keep as is) ---
+  // --- Form and Original State (Keep as is) ---
   const [seatOptions, setSeatOptions] = useState<Record<SeatOptionType, SeatOptionFormValues>>(
     () => Object.fromEntries(seatOptionTypes.map(type => [type, createDefaultFormValues(type)])) as Record<SeatOptionType, SeatOptionFormValues>
   );
@@ -308,53 +361,71 @@ export default function Seats() {
     () => Object.fromEntries(seatOptionTypes.map(type => [type, null])) as Record<SeatOptionType, SeatOption | null>
   );
 
-  // --- Effects (Keep as is) ---
+  // --- Effects ---
+  // Update state when DB data loads or changes
   useEffect(() => {
     const initialFormState = seatOptionTypes.reduce((acc, type) => ({ ...acc, [type]: createDefaultFormValues(type) }), {} as Record<SeatOptionType, SeatOptionFormValues>);
     const initialOriginalState = seatOptionTypes.reduce((acc, type) => ({ ...acc, [type]: null }), {} as Record<SeatOptionType, SeatOption | null>);
+    const initialConfiguredTypes = new Set<SeatOptionType>(); // Initialize empty
 
     if (dbSeatOptions) {
         dbSeatOptions.forEach(dbOption => {
             if (seatOptionTypes.includes(dbOption.type)) {
                 initialOriginalState[dbOption.type] = cloneDeep(dbOption);
                 initialFormState[dbOption.type] = convertDbToFormValues(dbOption);
+                initialConfiguredTypes.add(dbOption.type); // Mark existing types as configured
             }
         });
     }
     setOriginalSeatOptions(initialOriginalState);
     setSeatOptions(initialFormState);
-    // Reset open drawers when data reloads
-    setOpenDrawers(new Set());
+    setConfiguredTypes(initialConfiguredTypes); // Set the configured types state
+    setOpenDrawers(new Set()); // Reset open drawers
   }, [dbSeatOptions, barId]);
 
-  // --- Memoized Derived State (Keep as is) ---
+  // --- Memoized Derived State ---
+
+  // Calculate dirty types based on configuration status and state comparison
   const dirtyTypes = useMemo(() => {
-      return seatOptionTypes.filter(type =>
-          seatOptions[type] && !areStatesEqual(seatOptions[type], originalSeatOptions[type])
-      );
-  }, [seatOptions, originalSeatOptions]);
+      return seatOptionTypes.filter(type => {
+          const isConfigured = configuredTypes.has(type);
+          const originalRecord = originalSeatOptions[type];
+          const formState = seatOptions[type];
+
+          if (isConfigured && !originalRecord) {
+              return true; // Configured but not in DB yet -> Dirty (Create intent)
+          }
+          if (!isConfigured && originalRecord) {
+              return true; // Not configured but exists in DB -> Dirty (Delete intent)
+          }
+          if (isConfigured && originalRecord && formState) {
+              // Configured and exists in DB, check if form state differs
+              return !areStatesEqual(formState, originalRecord);
+          }
+          // If !isConfigured and !originalRecord, it's not dirty
+          // If isConfigured but !formState (shouldn't happen), not dirty
+          return false;
+      });
+  }, [seatOptions, originalSeatOptions, configuredTypes]);
 
   const isAnyFormInvalid = useMemo(() => {
-      // Validate only dirty types OR enabled types that haven't been saved yet (don't have original record)
-      const typesToValidate = seatOptionTypes.filter(type => {
-          const isDirty = dirtyTypes.includes(type);
-          const isEnabledNew = seatOptions[type]?.enabled && !originalSeatOptions[type];
-          return isDirty || isEnabledNew;
-      });
+      // Validate only types that are currently configured
+      return seatOptionTypes.some(type => {
+           const isConfigured = configuredTypes.has(type);
+           if (!isConfigured) return false; // Don't validate if not configured
 
-      return typesToValidate.some(type => {
-          const formValues = seatOptions[type];
-          // Only validate if the formValues exist (safety check)
-          return formValues ? validateFormValues(formValues).length > 0 : false;
+           const formValues = seatOptions[type];
+           // Only validate if the formValues exist (safety check)
+           return formValues ? validateFormValues(formValues, isConfigured).length > 0 : false;
       });
-  }, [dirtyTypes, seatOptions, originalSeatOptions]); // Add originalSeatOptions dependency
+  }, [seatOptions, configuredTypes]); // Depends on form values and configured status
 
 
   const hasUnsavedChanges = dirtyTypes.length > 0;
 
-  // --- Save Mutation (Keep as is - It saves based on dirtyTypes, which is correct) ---
+  // --- Save Mutation (MODIFIED LOGIC) ---
   const saveMutation = useMutation({
-      mutationFn: async (typesToSave: SeatOptionType[]) => {
+      mutationFn: async (typesToSave: SeatOptionType[]) => { // typesToSave are the dirtyTypes
           console.log(`Initiating save mutation for types: ${typesToSave.join(', ')}`);
 
           type MutationResult = { type: SeatOptionType; action: 'create' | 'update' | 'delete' | 'none'; record?: SeatOption | null; };
@@ -363,30 +434,36 @@ export default function Seats() {
           let validationFailed = false;
 
           type Operation = { type: SeatOptionType; action: 'create' | 'update' | 'delete' | 'none'; formValues?: SeatOptionFormValues; originalDbRecord?: SeatOption | null; error?: string; };
+
+          // Determine action based on configured state and original record existence
           const operations: Operation[] = typesToSave.map(type => {
+              const isConfigured = configuredTypes.has(type);
               const formValues = seatOptions[type];
               const originalDbRecord = originalSeatOptions[type];
-              if (!formValues) return { type, action: 'none', error: `No form data for ${type}` };
 
-              const isCurrentlyDirty = !areStatesEqual(formValues, originalDbRecord);
               let currentAction: 'create' | 'update' | 'delete' | 'none' = 'none';
 
-              if (formValues.enabled && !originalDbRecord) currentAction = 'create';
-              else if (!formValues.enabled && originalDbRecord) currentAction = 'delete';
-              else if (formValues.enabled && originalDbRecord && isCurrentlyDirty) currentAction = 'update';
-              else if (!formValues.enabled && !originalDbRecord) currentAction = 'none'; // Was disabled, still disabled, nothing to do
-              else if (isCurrentlyDirty && originalDbRecord) currentAction = 'update'; // Covers case where it was enabled, still enabled, but fields changed
-              else if (!isCurrentlyDirty) currentAction = 'none';
-
-               // Last check: If it's meant to be enabled, but somehow we determined 'none', force create/update if dirty
-              if (formValues.enabled && currentAction === 'none' && isCurrentlyDirty) {
-                  currentAction = originalDbRecord ? 'update' : 'create';
+              if (isConfigured && !originalDbRecord) {
+                  currentAction = 'create';
+              } else if (!isConfigured && originalDbRecord) {
+                  currentAction = 'delete';
+              } else if (isConfigured && originalDbRecord) {
+                  // It's configured and exists, check if it's actually dirty before updating
+                  if (!areStatesEqual(formValues, originalDbRecord)) {
+                      currentAction = 'update';
+                  } else {
+                      currentAction = 'none'; // Configured, exists, but no changes
+                  }
+              } else {
+                   // !isConfigured && !originalDbRecord -> 'none'
+                   currentAction = 'none';
               }
 
               if (currentAction === 'none') return { type, action: 'none' };
 
-              if (currentAction === 'create' || currentAction === 'update') {
-                  const validationErrors = validateFormValues(formValues);
+              // Validate before create or update
+              if ((currentAction === 'create' || currentAction === 'update') && formValues) {
+                  const validationErrors = validateFormValues(formValues, isConfigured);
                   if (validationErrors.length > 0) {
                       validationFailed = true;
                       const errorMsg = `Validation failed: ${validationErrors.join('; ')}`;
@@ -403,32 +480,47 @@ export default function Seats() {
               throw new Error(`Validation failed. Please fix errors:\n${errorSummary}`);
           }
 
+          // Execute DB operations
           for (const op of operations) {
-              if (op.action === 'none' || op.error || !op.formValues) continue;
+              if (op.action === 'none' || op.error) continue;
+
               const { type, action, formValues, originalDbRecord } = op;
               let dbError: any = null; let dbData: any = null;
 
               try {
-                  const restrictionsPayload: SeatOptionRestrictions = {};
-                  if (formValues.restrictions.require_bottle_drink) restrictionsPayload.require_bottle_drink = true;
-                  const effMinCons = getEffectiveMinConsumption(formValues.restrictions); if (effMinCons !== null) restrictionsPayload.min_consumption = effMinCons;
-                  const effMinBot = getEffectiveMinBottles(formValues.restrictions); if (effMinBot !== null) restrictionsPayload.min_bottles = effMinBot;
-                  const finalRestrictions = Object.keys(restrictionsPayload).length > 0 ? restrictionsPayload : null;
-                  // Ensure count is 0 if disabled, otherwise use form value or default to 0
-                  const finalAvailableCount = formValues.enabled ? (formValues.available_count ?? 0) : 0;
-                   // Reset non-applicable fields if disabled
-                  const finalMinPeople = formValues.enabled ? (formValues.min_people ?? 0) : 0;
-                  const finalMaxPeople = formValues.enabled ? (formValues.max_people ?? 0) : 0;
-                  const finalRestrictionsPayload = formValues.enabled ? finalRestrictions : null;
+                  let commonPayload: {
+                    enabled: boolean;
+                    available_count: number;
+                    min_people: number;
+                    max_people: number;
+                    restrictions: SeatOptionRestrictions | null;
+                  } | null = null;
+                  if (action === 'create' || action === 'update') {
+                      if (!formValues) throw new Error(`Missing form values for ${action} on ${type}`);
+                      const restrictionsPayload: SeatOptionRestrictions = {};
+                      if (formValues.restrictions.require_bottle_drink) restrictionsPayload.require_bottle_drink = true;
+                      const effMinCons = getEffectiveMinConsumption(formValues.restrictions); if (effMinCons !== null) restrictionsPayload.min_consumption = effMinCons;
+                      const effMinBot = getEffectiveMinBottles(formValues.restrictions); if (effMinBot !== null) restrictionsPayload.min_bottles = effMinBot;
+                      const finalRestrictions = Object.keys(restrictionsPayload).length > 0 ? restrictionsPayload : null;
 
-                  const commonPayload = { enabled: formValues.enabled, available_count: finalAvailableCount, min_people: finalMinPeople, max_people: finalMaxPeople, restrictions: finalRestrictionsPayload };
+                      // Payload includes the 'enabled' state from the form
+                      commonPayload = {
+                          enabled: formValues.enabled, // Use form's enabled state
+                          available_count: formValues.available_count ?? 0,
+                          min_people: formValues.min_people ?? 0,
+                          max_people: formValues.max_people ?? 0,
+                          restrictions: finalRestrictions
+                      };
+                  }
 
-                  console.log(`Executing ${action} for ${type} with payload:`, commonPayload);
+                  console.log(`Executing ${action} for ${type}`);
                   switch (action) {
                       case 'create':
+                          if (!barId || !commonPayload) throw new Error('Missing data for create');
                           const { data: iData, error: iError } = await supabase.from("seat_options").insert({ bar_id: barId, type: type, ...commonPayload }).select().single(); dbError = iError; dbData = iData; break;
                       case 'update':
-                          if (!originalDbRecord?.id) throw new Error(`Missing original ID for update on ${type}`);
+                          if (!originalDbRecord?.id || !commonPayload) throw new Error(`Missing data for update on ${type}`);
+                          // Perform update using the commonPayload which includes 'enabled'
                           const { error: uError } = await supabase.from("seat_options").update(commonPayload).eq("id", originalDbRecord.id); dbError = uError; dbData = { ...originalDbRecord, ...commonPayload, id: originalDbRecord.id, bar_id: originalDbRecord.bar_id, type: originalDbRecord.type }; break;
                       case 'delete':
                           if (!originalDbRecord?.id) throw new Error(`Missing original ID for delete on ${type}`);
@@ -440,6 +532,8 @@ export default function Seats() {
               } catch (error: any) {
                   console.error(`Failed ${action} for ${type}:`, error);
                   errors.push({ type, message: error.message || `Failed to ${action} ${type}` });
+                  // Don't necessarily abort all saves on one failure, let others proceed if possible?
+                  // For simplicity, let's keep aborting on first error.
                   throw new Error(`Operation failed for ${type}. Aborting remaining saves.`);
               }
           }
@@ -450,30 +544,31 @@ export default function Seats() {
           console.log("Save Mutation onSuccess:", results);
           let changesMade = results.some(r => r.action !== 'none');
           const updatedOriginals = { ...originalSeatOptions };
-          const updatedFormState = { ...seatOptions }; // Start with current form state
+          const updatedFormState = { ...seatOptions };
+          const updatedConfiguredTypes = new Set(configuredTypes); // Copy current configured
 
           results.forEach(({ type, action, record }) => {
               if (action === 'create' || action === 'update') {
                   updatedOriginals[type] = cloneDeep(record ?? null);
-                  // Update the form state to match the newly saved DB state
                   updatedFormState[type] = record ? convertDbToFormValues(record) : createDefaultFormValues(type);
+                  updatedConfiguredTypes.add(type); // Ensure it's marked configured
               } else if (action === 'delete') {
                   updatedOriginals[type] = null;
-                   // Reset the form state to default disabled after delete
-                  updatedFormState[type] = createDefaultFormValues(type);
+                  updatedFormState[type] = createDefaultFormValues(type); // Reset form state
+                  updatedConfiguredTypes.delete(type); // Mark as not configured
               }
           });
 
           if (changesMade) {
               setOriginalSeatOptions(updatedOriginals);
-              setSeatOptions(updatedFormState); // Apply the updated form state reflecting saved data
+              setSeatOptions(updatedFormState);
+              setConfiguredTypes(updatedConfiguredTypes); // Update configured state
               setOpenDrawers(new Set()); // Close all drawers on successful save
               queryClient.invalidateQueries({ queryKey: ["seat-options", barId] });
-              toast.show({ type: "success", text1: "Changes Saved", text2: `${results.length} item(s) updated.` });
+              toast.show({ type: "success", text1: "Changes Saved", text2: `${results.filter(r => r.action !== 'none').length} item(s) affected.` });
           } else {
                toast.show({ type: "info", text1: "No Changes", text2: `No modifications needed saving.` });
           }
-          // No longer need setEditingType(null);
       },
       onError: (error: Error) => {
            console.error("Save Mutation onError:", error);
@@ -500,146 +595,224 @@ export default function Seats() {
   }, [saveMutation, dirtyTypes, isAnyFormInvalid, toast]);
 
   const handleGlobalRevert = useCallback(() => {
-    console.log("Revertling changes for types:", dirtyTypes);
+    console.log("Reverting changes for types:", dirtyTypes);
     if (dirtyTypes.length === 0) return;
 
     const revertedState = { ...seatOptions };
+    const revertedConfigured = new Set(configuredTypes); // Start with current
+
     dirtyTypes.forEach(type => {
         const originalDbState = originalSeatOptions[type];
         if (originalDbState) {
+            // Revert form state to match DB
             revertedState[type] = convertDbToFormValues(originalDbState);
+            // Ensure it's marked as configured since it exists in DB
+            revertedConfigured.add(type);
         } else {
+            // Revert form state to default
             revertedState[type] = createDefaultFormValues(type);
+            // Mark as not configured since it didn't exist in DB
+            revertedConfigured.delete(type);
         }
     });
     setSeatOptions(revertedState);
+    setConfiguredTypes(revertedConfigured); // Revert configured state as well
     setOpenDrawers(new Set()); // Close all drawers on revert
     toast.show({ type: 'info', text1: 'Changes Reverted', text2: 'Modifications have been discarded.' });
-  }, [seatOptions, originalSeatOptions, dirtyTypes, toast]);
+  }, [seatOptions, originalSeatOptions, configuredTypes, dirtyTypes, toast]); // Add configuredTypes dependency
 
-  // --- *** UPDATED handleEnableToggle *** ---
-  const handleEnableToggle = useCallback((type: SeatOptionType, value: boolean) => {
-    // Update the enabled status in the form state
-    setSeatOptions(prev => ({ ...prev, [type]: { ...prev[type], enabled: value } }));
+  // --- NEW Handler for the Main/Header Switch ---
+  const handleConfigureToggle = useCallback((type: SeatOptionType, value: boolean) => {
+      setConfiguredTypes(prev => {
+          const newConfigured = new Set(prev);
+          if (value) {
+              newConfigured.add(type);
+              // If configuring for the first time (no original record), set default enabled state
+              if (!originalSeatOptions[type]) {
+                  setSeatOptions(prevForm => ({
+                      ...prevForm,
+                      [type]: { ...prevForm[type], enabled: true } // Default to enabled: true
+                  }));
+              }
+              // Automatically open drawer when configuring ON
+              setOpenDrawers(prevOpen => new Set(prevOpen).add(type));
+          } else {
+              newConfigured.delete(type);
+              // Automatically close drawer when configuring OFF
+              setOpenDrawers(prevOpen => {
+                  const newOpen = new Set(prevOpen);
+                  newOpen.delete(type);
+                  return newOpen;
+              });
+          }
+          return newConfigured;
+      });
+  }, [originalSeatOptions]); // Depends on original options to set default enabled
 
-    // Update the set of open drawers based on the requirements
-    setOpenDrawers(prevOpenDrawers => {
-        const newOpenDrawers = new Set(prevOpenDrawers); // Clone the set
-        if (value) {
-            // Requirement: Open drawer when enabling
-            newOpenDrawers.add(type);
-        } else {
-            // Requirement: Close drawer ONLY when disabling THIS specific type
-            newOpenDrawers.delete(type);
-        }
-        return newOpenDrawers;
-    });
-  }, []); // No longer depends on editingType
 
-  // --- *** UPDATED handleChevronToggle (new handler) *** ---
+  // --- Handler for Chevron Toggle (Open/Close Drawer) ---
   const handleChevronToggle = useCallback((type: SeatOptionType) => {
+      // Only allow opening the drawer if the type is configured
+      const isConfigured = configuredTypes.has(type);
+
       setOpenDrawers(prevOpenDrawers => {
           const newOpenDrawers = new Set(prevOpenDrawers);
           if (newOpenDrawers.has(type)) {
-              // Requirement: Close drawer when pressing chevron up
-              newOpenDrawers.delete(type);
-          } else {
-              // Requirement: Open drawer when pressing chevron down (if enabled)
-              // Check if enabled within the function or rely on the button being disabled
-               const currentOption = seatOptions[type]; // Get current state
-               if (currentOption?.enabled) { // Only open if enabled
-                   newOpenDrawers.add(type);
-               }
+              newOpenDrawers.delete(type); // Close if open
+          } else if (isConfigured) { // Only open if configured
+              newOpenDrawers.add(type);
           }
           return newOpenDrawers;
       });
-  }, [seatOptions]); // Depends on seatOptions to check if enabled
+  }, [configuredTypes]); // Depends on configuredTypes
+
 
   // --- Render Logic ---
   const renderSeatOption = useCallback((type: SeatOptionType) => {
-    const currentOption = seatOptions[type];
-    // --- *** USE UPDATED STATE *** ---
-    const isCurrentlyOpen = openDrawers.has(type); // Check if this specific drawer is in the set
-    // --- *** END STATE UPDATE *** ---
+    const currentFormValues = seatOptions[type];
+    const isConfigured = configuredTypes.has(type); // Main switch state
+    const originalRecord = originalSeatOptions[type];
+    const originalRecordExists = !!originalRecord;
+    const isCurrentlyOpen = openDrawers.has(type);
 
-    if (!currentOption) return (<View key={type} className="bg-[#1E1E1E] rounded-xl m-4 p-4 border border-white/10 opacity-50"><ActivityIndicator color="#9ca3af" /></View>);
+    if (!currentFormValues) return (<View key={type} className="bg-[#1E1E1E] rounded-xl m-4 p-4 border border-white/10 opacity-50"><ActivityIndicator color="#9ca3af" /></View>);
 
-    const isSeatTypeEnabled = currentOption.enabled;
-    const originalRecordExists = !!originalSeatOptions[type];
+    const isInternallyEnabled = currentFormValues.enabled; // Second switch state
 
-    // Validation flags
-    const validationErrors = validateFormValues(currentOption);
+    // Validation based on configured status and internal enabled status
+    const validationErrors = validateFormValues(currentFormValues, isConfigured);
     const isAvailableCountInvalid = validationErrors.some(e => e.includes('Available count'));
-    const isMaxPeopleInvalid = validationErrors.some(e => e.includes('Max people'));
+    const isMaxPeopleInvalid = validationErrors.some(e => e.includes('Max people')); // This will now be true if min is set and max isn't, or if max < min
     const isMinConsumptionAmountInvalid = validationErrors.some(e => e.includes('Min consumption'));
     const isMinBottlesAmountInvalid = validationErrors.some(e => e.includes('Min bottles'));
+
+    // Check if this specific type is dirty
     const isThisTypeDirty = dirtyTypes.includes(type);
 
-    const cardOpacityClass = !isSeatTypeEnabled && !originalRecordExists ? 'opacity-50' : !isSeatTypeEnabled ? 'opacity-70' : '';
+    // Card opacity based on configuration status
+    const cardOpacityClass = !isConfigured ? 'opacity-50' : '';
 
     return (
       <View key={type} className={`bg-[#1E1E1E] rounded-xl m-4 overflow-hidden border ${isThisTypeDirty ? 'border-yellow-400/50' : 'border-white/10'} ${cardOpacityClass}`}>
-        {/* Card Header */}
-        <View className={`flex-row justify-between items-center p-4`}>
-           <View className="flex-row items-center flex-1 mr-2">
-             <Text className={`text-lg font-semibold mr-2 ${isSeatTypeEnabled ? 'text-white' : 'text-gray-400'}`}>{type.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}</Text>
-             {/* --- *** UPDATE CHEVRON HANDLER *** --- */}
-             <TouchableOpacity
-                 className="p-1"
-                 onPress={() => handleChevronToggle(type)} // Use the new toggle handler
-                 disabled={!isSeatTypeEnabled || saveMutation.isPending} // Keep disabled logic
-             >
-                {/* Show ChevronUp if open, ChevronDown otherwise */}
-                {isCurrentlyOpen && isSeatTypeEnabled ? <ChevronUp size={20} color="#ff4d6d" /> : <ChevronDown size={20} color={isSeatTypeEnabled ? "#9ca3af" : "#6b7280"} />}
-             </TouchableOpacity>
-              {/* --- *** END CHEVRON UPDATE *** --- */}
-             {isThisTypeDirty && !saveMutation.isPending && <View className="w-2 h-2 bg-yellow-400 rounded-full ml-2"></View>}
+        {/* Card Header: Controls Configuration (Main Switch) */}
+        <TouchableOpacity
+          // Chevron toggle only works if configured
+          onPress={() => handleChevronToggle(type)}
+          disabled={!isConfigured || saveMutation.isPending}
+          className={`flex-row justify-between items-center p-4`}
+          activeOpacity={0.8}
+        >
+          {/* Title and Chevron */}
+          <View className="flex-row items-center flex-1 mr-2">
+              <Text className={`text-lg font-semibold mr-2 ${isConfigured ? 'text-white' : 'text-gray-500'}`}>
+                  {type.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
+              </Text>
+              <View className="p-1">
+                  {/* Chevron indicates drawer state, colored based on configured status */}
+                  {isCurrentlyOpen && isConfigured
+                      ? <ChevronUp size={20} color="#ff4d6d" />
+                      : <ChevronDown size={20} color={isConfigured ? "#9ca3af" : "#6b7280"} />
+                  }
+              </View>
+               {/* Dirty indicator */}
+               {isThisTypeDirty && !saveMutation.isPending && (
+                  <View className="w-2 h-2 bg-yellow-400 rounded-full ml-2"></View>
+               )}
           </View>
-          <View className="flex-row items-center">
-             <Text className={`text-xs mr-2 ${isSeatTypeEnabled ? 'text-green-400' : 'text-gray-500'}`}>{isSeatTypeEnabled ? 'Enabled' : 'Disabled'}</Text>
-             {/* Use handleEnableToggle for the Switch */}
-             <Switch value={isSeatTypeEnabled} onValueChange={(value) => handleEnableToggle(type, value)} trackColor={{ false: '#374151', true: '#34d39940' }} thumbColor={isSeatTypeEnabled ? '#34d399' : '#9ca3af'} disabled={saveMutation.isPending} ios_backgroundColor="#374151" />
-          </View>
-        </View>
 
-        {/* Card Summary (Show if NOT currently open) */}
-        {!isCurrentlyOpen && (
-           <View className={`p-4 border-t border-white/10 flex-row flex-wrap ${!isSeatTypeEnabled ? 'opacity-70' : ''}`}>
-             <View className="flex-row items-center mr-4 mb-2"><Users size={14} color="#9ca3af" /><Text className={`ml-2 text-sm ${isAvailableCountInvalid && isSeatTypeEnabled ? 'text-red-400' : 'text-gray-400'}`}>{currentOption.available_count ?? 0} seats</Text>{isAvailableCountInvalid && isSeatTypeEnabled && <AlertCircle size={14} color="#f87171" style={{ marginLeft: 4 }}/>}</View>
-             {(currentOption.min_people !== null || currentOption.max_people !== null) && (<View className="flex-row items-center mr-4 mb-2"><Users size={14} color="#9ca3af" /><Text className={`ml-2 text-sm ${isMaxPeopleInvalid && isSeatTypeEnabled ? 'text-red-400' : 'text-gray-400'}`}>{currentOption.min_people ?? 'Any'}-{currentOption.max_people ?? 'Any'} ppl</Text>{isMaxPeopleInvalid && isSeatTypeEnabled && <AlertCircle size={14} color="#f87171" style={{ marginLeft: 4 }}/>}</View>)}
-             {currentOption.restrictions.require_bottle_drink && (<View style={[styles.badge, styles.tealBadge]}><Wine size={12} color="#FFF" style={styles.badgeIcon} /><Text style={styles.badgeText}>Bottle Req.</Text></View>)}
-             {getEffectiveMinConsumption(currentOption.restrictions) !== null && (<View style={[styles.badge, styles.yellowBadge]}><DollarSign size={12} color="#FFF" style={styles.badgeIcon}/><Text style={styles.badgeText}>Min €{getEffectiveMinConsumption(currentOption.restrictions)}</Text>{isMinConsumptionAmountInvalid && currentOption.restrictions.min_consumption_enabled && isSeatTypeEnabled && <AlertCircle size={12} color="#92400e" style={{ marginLeft: 4 }}/>}</View>)}
-             {getEffectiveMinBottles(currentOption.restrictions) !== null && (<View style={[styles.badge, styles.purpleBadge]}><Wine size={12} color="#FFF" style={styles.badgeIcon}/><Text style={styles.badgeText}>Min {getEffectiveMinBottles(currentOption.restrictions)} Bottles</Text>{isMinBottlesAmountInvalid && currentOption.restrictions.min_bottles_enabled && isSeatTypeEnabled && <AlertCircle size={12} color="#581c87" style={{ marginLeft: 4 }}/>}</View>)}
+          {/* Main Switch (Configure Toggle) */}
+          <View className="flex-row items-center">
+              <Text className={`text-xs mr-2 ${isConfigured ? 'text-pink-400' : 'text-gray-500'}`}>
+                  {isConfigured ? 'Configured' : 'Off'}
+              </Text>
+              <Switch
+                  value={isConfigured}
+                  onValueChange={(value) => handleConfigureToggle(type, value)}
+                  trackColor={{ false: '#374151', true: '#ff4d6d40' }} // Use pinkish color for configure
+                  thumbColor={isConfigured ? '#ff4d6d' : '#9ca3af'}
+                  disabled={saveMutation.isPending}
+                  ios_backgroundColor="#374151"
+              />
+          </View>
+        </TouchableOpacity>
+
+        {/* Card Summary (Show if NOT open and IS configured) */}
+        {!isCurrentlyOpen && isConfigured && (
+            <View className={`p-4 border-t border-white/10 flex-row flex-wrap`}>
+                {/* Display internal enabled status */}
+                <View className={`flex-row items-center mr-4 mb-2 ${isInternallyEnabled ? 'opacity-100' : 'opacity-60'}`}>
+                    {isInternallyEnabled ? <Power size={14} color="#34d399" /> : <PowerOff size={14} color="#9ca3af" />}
+                    <Text className={`ml-1 text-sm ${isInternallyEnabled ? 'text-green-400' : 'text-gray-400'}`}>
+                        {isInternallyEnabled ? 'Enabled' : 'Disabled'}
+                    </Text>
+                </View>
+                {/* Other summary items - show based on form values, validate based on internal enabled state */}
+                <View className="flex-row items-center mr-4 mb-2">
+                    <Users size={14} color="#9ca3af" />
+                    <Text className={`ml-2 text-sm ${isAvailableCountInvalid && isInternallyEnabled ? 'text-red-400' : 'text-gray-400'}`}>
+                        {currentFormValues.available_count ?? 0} seats
+                    </Text>
+                    {isAvailableCountInvalid && isInternallyEnabled && <AlertCircle size={14} color="#f87171" style={{ marginLeft: 4 }}/>}
+                </View>
+                {/* Conditionally render Min/Max People Summary */}
+                 {(currentFormValues.min_people !== null || currentFormValues.max_people !== null) && (
+                     <View className="flex-row items-center mr-4 mb-2">
+                        <Users size={14} color="#9ca3af" />
+                        <Text className={`ml-2 text-sm ${isMaxPeopleInvalid ? 'text-red-400' : 'text-gray-400'}`}>
+                            {currentFormValues.min_people ?? 'Any'}-{currentFormValues.max_people ?? 'Any'} ppl
+                        </Text>
+                        {/* The AlertCircle will show if isMaxPeopleInvalid is true */}
+                        {isMaxPeopleInvalid && <AlertCircle size={14} color="#f87171" style={{ marginLeft: 4 }}/>}
+                    </View>
+                )}
+                {/* Restriction Badges - show based on form values, validate based on internal enabled state */}
+                {currentFormValues.restrictions.require_bottle_drink && (<View style={[styles.badge, styles.tealBadge]}><Wine size={12} color="#FFF" style={styles.badgeIcon} /><Text style={styles.badgeText}>Bottle Req.</Text></View>)}
+                {getEffectiveMinConsumption(currentFormValues.restrictions) !== null && (
+                    <View style={[styles.badge, styles.yellowBadge]}>
+                        <DollarSign size={12} color="#FFF" style={styles.badgeIcon}/>
+                        <Text style={styles.badgeText}>Min €{getEffectiveMinConsumption(currentFormValues.restrictions)}</Text>
+                        {isMinConsumptionAmountInvalid && currentFormValues.restrictions.min_consumption_enabled && isInternallyEnabled && <AlertCircle size={12} color="#92400e" style={{ marginLeft: 4 }}/>}
+                    </View>
+                )}
+                {getEffectiveMinBottles(currentFormValues.restrictions) !== null && (
+                    <View style={[styles.badge, styles.purpleBadge]}>
+                        <Wine size={12} color="#FFF" style={styles.badgeIcon}/>
+                        <Text style={styles.badgeText}>Min {getEffectiveMinBottles(currentFormValues.restrictions)} Bottles</Text>
+                        {isMinBottlesAmountInvalid && currentFormValues.restrictions.min_bottles_enabled && isInternallyEnabled && <AlertCircle size={12} color="#581c87" style={{ marginLeft: 4 }}/>}
+                    </View>
+                )}
            </View>
         )}
 
-        {/* Edit Form (Show if currently open) */}
-        {isCurrentlyOpen && (
+        {/* Edit Form (Show if currently open AND configured) */}
+        {isCurrentlyOpen && isConfigured && (
           <SeatOptionForm
-            values={currentOption}
+            values={currentFormValues}
+            // Pass the form update handler
             onChange={(values) => setSeatOptions((prev) => ({ ...prev, [type]: values }))}
-            isDisabled={!isSeatTypeEnabled} // Form is disabled if the seat type itself is disabled
+            // Form is only disabled if not configured (isDisabled = !isConfigured)
+            // However, the component is only rendered if isConfigured is true, so isDisabled should always be false here. Let's pass false.
+            isDisabled={false} // The form itself is active if rendered
             isAvailableCountInvalid={isAvailableCountInvalid}
             isMaxPeopleInvalid={isMaxPeopleInvalid}
             isMinConsumptionAmountInvalid={isMinConsumptionAmountInvalid}
             isMinBottlesAmountInvalid={isMinBottlesAmountInvalid}
+            originalRecordExists={originalRecordExists} // Pass this info
           />
         )}
       </View>
     );
   }, [
-      // --- *** UPDATE DEPENDENCIES *** ---
-      openDrawers, // Use the Set of open drawers
-      // editingType, // Remove old state
-      // --- *** END DEPENDENCY UPDATE *** ---
       seatOptions,
       originalSeatOptions,
+      configuredTypes, // Add configuredTypes
+      openDrawers,
       dirtyTypes,
-      handleEnableToggle,
-      handleChevronToggle, // Add new handler
+      handleConfigureToggle, // Add new handler
+      handleChevronToggle, // Keep chevron handler
       saveMutation.isPending,
       toast,
-      styles // Keep styles if used directly
+      styles // Include styles in dependencies if it's defined outside and could change
   ]);
 
    // --- Loading/Error States (Keep as is) ---
@@ -663,11 +836,16 @@ export default function Seats() {
             keyboardShouldPersistTaps="handled"
             contentContainerStyle={{ paddingBottom: hasUnsavedChanges ? (safeAreaInsets.bottom > 0 ? safeAreaInsets.bottom + 70 : 82) : 20 }} // Adjust padding dynamically
           >
-           <View className="p-4 border-b border-white/10"><Text className="text-2xl font-semibold text-white mb-1">Seat Management</Text><Text className="text-base text-gray-400">Enable/disable and configure options. Save changes below.</Text></View>
+          {/* Header */}
+           <View className="p-4 border-b border-white/10">
+           <Text className="text-2xl font-semibold text-white mb-1">Seat Management</Text>
+           <Text className="text-base text-gray-400">Configure seat types using the main switch. Then, set details and enable/disable specific options inside.</Text>
+           </View>
            {seatOptionTypes.map(renderSeatOption)}
          </ScrollView>
        </KeyboardAvoidingView>
 
+       {/* Floating Save/Revert Bar */}
        {hasUnsavedChanges && (
          <View style={[
              styles.floatingBar,
@@ -675,6 +853,7 @@ export default function Seats() {
              ]}
              className="bg-[#1E1E1E] border-t border-white/20 shadow-lg"
          >
+            {/* Revert Button */}
             <TouchableOpacity
                 className={`flex-row items-center p-3 mr-3 ${saveMutation.isPending ? 'opacity-50' : ''}`}
                 onPress={handleGlobalRevert}
@@ -683,12 +862,14 @@ export default function Seats() {
                 <RotateCcw size={18} color="#9ca3af" />
                 <Text className="text-gray-400 ml-2 text-base font-medium">Revert</Text>
             </TouchableOpacity>
+            {/* Save Button */}
             <TouchableOpacity
                 className={`flex-row items-center bg-[#ff4d6d] py-3 px-5 rounded-lg ${
+                    // Save button is disabled if mutation is pending OR if any configured form is invalid
                     (saveMutation.isPending || isAnyFormInvalid) ? 'opacity-50 bg-gray-600' : ''
                 }`}
                 onPress={handleGlobalSave}
-                disabled={saveMutation.isPending || isAnyFormInvalid}
+                disabled={saveMutation.isPending || isAnyFormInvalid} // Use the updated isAnyFormInvalid check
             >
                 {saveMutation.isPending ? (
                    <ActivityIndicator size="small" color="#FFFFFF" style={{ marginRight: 8 }}/>

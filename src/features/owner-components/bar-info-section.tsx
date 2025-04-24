@@ -107,6 +107,7 @@ export type FormInputProps = {
   autoCapitalize?: "none" | "sentences" | "words" | "characters";
   keyboardType?: "default" | "email-address" | "numeric" | "phone-pad" | "url" | "numbers-and-punctuation";
   secureTextEntry?: boolean;
+  maxLength?: number;
 };
 
 export const FormInput: React.FC<FormInputProps> = ({
@@ -120,6 +121,7 @@ export const FormInput: React.FC<FormInputProps> = ({
   autoCapitalize = "sentences",
   keyboardType = "default",
   secureTextEntry = false,
+  maxLength,
 }) => {
   const hasError = !!errors[name];
   return (
@@ -145,6 +147,7 @@ export const FormInput: React.FC<FormInputProps> = ({
             autoCapitalize={autoCapitalize}
             keyboardType={keyboardType}
             secureTextEntry={secureTextEntry}
+            maxLength={maxLength}
           />
         )}
       />
@@ -321,25 +324,14 @@ const BarInfoSection = ({ barId }: BarInfoSectionProps): JSX.Element | null => {
   return (
     <>
       <View style={styles.container}>
-        <TouchableOpacity
-          activeOpacity={0.8}
-          onPress={toggleExpansion}
-          style={styles.header}
-          accessibilityRole="button"
-          accessibilityState={{ expanded: isExpanded }}
-          accessibilityLabel="Bar Information Section"
-          accessibilityHint={isExpanded ? "Tap to collapse" : "Tap to expand"}
-        >
-          <View style={styles.headerTextContainer}>
-            <Text style={styles.headerTitle}>Bar Information</Text>
-            <Text style={styles.headerSubtitle}>Manage essential bar details.</Text>
+        <View>
+          {/* Header */}
+          <View className="p-4 border-b border-white/10">
+            <Text className="text-2xl font-semibold text-white mb-1">Bar Information</Text>
+            <Text className="text-base text-gray-400">Manage essential bar details.</Text>
           </View>
-          <Animated.View style={chevronAnimatedStyle}>
-            <ChevronDown size={20} color={isExpanded ? "#ff4d6d" : "#A0AEC0"} />
-          </Animated.View>
-        </TouchableOpacity>
+        </View>
 
-        {isExpanded && (
           <View style={styles.content}>
             {/* --- Fields using DisplayFieldStyled --- */}
             <DisplayFieldStyled
@@ -387,7 +379,6 @@ const BarInfoSection = ({ barId }: BarInfoSectionProps): JSX.Element | null => {
               onEditPress={() => handleEditPress("description")}
             />
           </View>
-        )}
       </View>
 
       {/* --- Modal --- */}

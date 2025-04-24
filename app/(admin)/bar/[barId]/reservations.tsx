@@ -607,24 +607,11 @@ export default function ReservationsScreen() {
   return (
     <SafeAreaView className="flex-1 bg-[#0f0f13]">
       <StatusBar style="light" />
-      
       {/* Header */}
-      <View className="px-5 pt-2 pb-4 border-b border-[#1f1f27]">
-        <View className="flex-row items-center mb-2">
-          <Pressable
-            className="w-10 h-10 rounded-full justify-center items-center mr-3"
-            onPress={() => router.back()}
-            accessibilityRole="button"
-            accessibilityLabel="Go back"
-          >
-            <ArrowLeft size={22} color="#fff" />
-          </Pressable>
-          <Text className="text-xl font-bold text-white flex-1">
-            Reservations
-          </Text>
-        </View>
-      </View>
-
+                 <View className="p-4 border-b border-white/10">
+                 <Text className="text-2xl font-semibold text-white mb-1">Reservation Management</Text>
+                 <Text className="text-base text-gray-400">Manage your bar's reservations.</Text>
+                 </View>
       {/* Filters */}
       <FilterBar
         statusFilter={statusFilter}
