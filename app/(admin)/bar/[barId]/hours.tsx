@@ -1,4 +1,4 @@
-import { StyleSheet, Text, View, ScrollView } from 'react-native'
+import { StyleSheet, View, ScrollView } from 'react-native'
 import React from 'react'
 import BarOperatingHours from '@/src/features/owner-components/operating-hours/bar-operating-hours'
 import { useLocalSearchParams } from 'expo-router'

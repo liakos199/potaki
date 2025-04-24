@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { View, Text, FlatList, ActivityIndicator, Pressable, Image, TextInput, RefreshControl, useWindowDimensions, Animated } from 'react-native';
+import { View, Text, FlatList, ActivityIndicator, Pressable, Image, TextInput, RefreshControl} from 'react-native';
 import { useRouter } from 'expo-router';
 import { supabase } from '@/src/lib/supabase';
 import { useAuthStore } from '@/src/features/auth/store/auth-store';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Search, MapPin, Clock, Calendar, X, ChevronRight, ImageIcon, Star, Menu, Filter, Heart, Map } from 'lucide-react-native';
+import { Search, MapPin, Calendar, X, ChevronRight, ImageIcon, Star, Filter, Heart, Map } from 'lucide-react-native';
 import { format } from 'date-fns';
 import { StatusBar } from 'expo-status-bar';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -37,7 +37,6 @@ const HomeScreen = (): JSX.Element => {
   const [refreshing, setRefreshing] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [activeCategory, setActiveCategory] = useState('all');
-  const { width } = useWindowDimensions();
   
   const router = useRouter();
   const signOut = useAuthStore((s) => s.signOut);
@@ -223,7 +222,7 @@ const HomeScreen = (): JSX.Element => {
           <View className="flex-row">
             <Pressable
               className="w-10 h-10 rounded-full bg-[#1f1f27] items-center justify-center mr-3"
-              onPress={() => router.push('/map')}
+              // onPress={() => router.push('/map')}
             >
               <Map size={18} color="#f01669" />
             </Pressable>
@@ -232,7 +231,7 @@ const HomeScreen = (): JSX.Element => {
               className="w-10 h-10 rounded-full bg-[#1f1f27] items-center justify-center"
               accessibilityRole="button"
               accessibilityLabel="User profile"
-              onPress={() => router.push('/profile')}
+              // onPress={() => router.push('/profile')}
             >
               <Image 
                 source={{ uri: 'https://ui-avatars.com/api/?background=f01669&color=fff' }} 

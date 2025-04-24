@@ -194,7 +194,6 @@ const SeatOptionForm = ({
   isMaxPeopleInvalid,
   isMinConsumptionAmountInvalid,
   isMinBottlesAmountInvalid,
-  originalRecordExists, // Does the DB record exist?
 }: SeatOptionFormProps) => {
 
   // Keep updateField and updateRestriction as they are, they modify the 'values' object

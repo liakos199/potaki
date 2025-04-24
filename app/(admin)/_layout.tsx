@@ -1,11 +1,11 @@
 import { useEffect } from 'react';
 import { Stack, useRouter } from 'expo-router';
 import { useAuthStore } from '@/src/features/auth/store/auth-store';
-import { View, ActivityIndicator, Text } from 'react-native';
+import { View, ActivityIndicator } from 'react-native';
 
 const AdminLayout = ({ children }: { children: React.ReactNode }) => {
   const profile = useAuthStore((s) => s.profile);
-  const hydrated = useAuthStore((s) => s.hydrated); // Assume you have a hydration flag in your auth store
+  const hydrated = useAuthStore((s) => s.hydrated);
   const router = useRouter();
 
   useEffect(() => {

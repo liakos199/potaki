@@ -12,7 +12,6 @@ import { useToast } from '@/src/components/general/Toast';
 import { StatusBar } from 'expo-status-bar';
 import { ArrowLeft, Wine, Plus, Edit2, Trash2, X, DollarSign, Tag, Info, AlertCircle } from 'lucide-react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { LinearGradient } from 'expo-linear-gradient';
 
 // Types
 const drinkTypes = ['single-drink', 'bottle'] as const;
@@ -259,7 +258,7 @@ const BottleFormModal = ({
             <Controller
               control={control}
               name="name"
-              render={({ field: { value, onChange, onBlur } }) => (
+              render={({ field: { value, onChange } }) => (
                 <View className="mb-4">
                   <View className="flex-row items-center mb-2">
                     <Tag size={16} color="#9ca3af" />

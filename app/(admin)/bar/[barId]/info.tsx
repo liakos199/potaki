@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from "react";
+import React, { useEffect, useState } from "react";
 import {
   View,
   Text,
@@ -8,20 +8,18 @@ import {
   Switch,
   TextInput,
   TouchableOpacity,
-  LayoutAnimation,
   UIManager,
 } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Controller, type FieldErrors, type Control } from "react-hook-form";
-import Animated, { useSharedValue, useAnimatedStyle, withTiming } from "react-native-reanimated";
+import { useSharedValue, useAnimatedStyle, withTiming } from "react-native-reanimated";
 import { z } from "zod";
 import { supabase } from "@/src/lib/supabase"; // Adjust path if needed
 import { useAuthStore } from "@/src/features/auth/store/auth-store"; // Adjust path if needed
 import { useToast } from "@/src/components/general/Toast"; // Adjust path if needed
 import {
   AlertCircle,
-  ChevronDown,
   Edit2,
   AlertTriangle,
   Plus,
