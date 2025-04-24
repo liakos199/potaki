@@ -161,9 +161,6 @@ const EditModal: React.FC<EditModalProps> = ({
           {renderErrorText(editingField)}
           {renderHelperText(editingField)}
         </View>
-
-        {/* --- Button Row --- */}
-        {/* Use flex-row, items-center for alignment. No justify- needed as flex-1 handles width */}
         <View className="flex-row items-center mt-8 mb-6">
           {/* Cancel Button: Added flex-1 to grow, added flex items-center justify-center */}
           <TouchableOpacity

@@ -3,7 +3,7 @@
 import React, { useEffect } from 'react';
 import { View, Text, Pressable } from 'react-native';
 // Import Sofa or relevant icon if you want an icon next to the selected type
-import { Users, Minus, Plus, Info, Sofa } from 'lucide-react-native';
+import { Minus, Plus, Info, Sofa } from 'lucide-react-native';
 
 // Define the props the component expects
 type PartySizeSelectionProps = {

@@ -439,7 +439,6 @@ const BarInfoScreen = (): JSX.Element | null => {
   return (
     <View className="flex-1 bg-[#121826]">
       <ScrollView className="flex-1 p-4">
-        {/* Render the internal BarInfoSection component */}
         <BarInfoSection barId={barId} />
       </ScrollView>
     </View>
@@ -447,4 +446,4 @@ const BarInfoScreen = (): JSX.Element | null => {
 };
 
 
-export default BarInfoScreen; // Export the main screen component
+export default BarInfoScreen;

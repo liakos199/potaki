@@ -32,7 +32,12 @@ const AdminLayout = ({ children }: { children: React.ReactNode }) => {
 export default function AdminStackLayout() {
   return (
     <AdminLayout>
-      <Stack />
+      <Stack
+        screenOptions={{
+          headerStyle: { backgroundColor: '#2d2d2d' }, // Light background
+          headerTintColor: 'white', // Back button and title color
+        }}
+      />
     </AdminLayout>
   );
 }
