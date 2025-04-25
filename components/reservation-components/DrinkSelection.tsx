@@ -1,8 +1,14 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { View, Text, Pressable, ScrollView, ActivityIndicator } from 'react-native';
-import { Wine, Plus, Minus } from 'lucide-react-native';
+import { Plus, Minus } from 'lucide-react-native';
 import { supabase } from '@/src/lib/supabase';
-// TODO - ADDED ONE EXTRA COLUMN NAMED  : restrictions
+import { useQuery } from '@tanstack/react-query';
+import Toast from '@/components/general/Toast';
+import { z } from 'zod';
+
+// import type { Database } from '@/src/lib/database.types';
+// type Drink = Database['public']['Tables']['drink_options']['Row'];
+
 type DrinkOption = {
   id: string;
   name: string | null;
@@ -21,216 +27,207 @@ type DrinkSelectionProps = {
   onDrinksChange: (drinks: SelectedDrink[]) => void;
 };
 
-const DrinkSelection: React.FC<DrinkSelectionProps> = ({
-  barId,
-  selectedDrinks,
-  onDrinksChange
-}) => {
-  const [drinkOptions, setDrinkOptions] = useState<DrinkOption[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [activeCategory, setActiveCategory] = useState('all');
+const DRINK_TYPE_LABELS: Record<string, string> = {
+  'single-drink': 'By the Glass',
+  'bottle': 'Bottle',
+  'all': 'All',
+};
+
+const DrinkOptionSchema = z.object({
+  id: z.string(),
+  name: z.string().nullable(),
+  price: z.number(),
+  type: z.string(),
+});
+const DrinkOptionsSchema = z.array(DrinkOptionSchema);
+
+const fetchDrinkOptions = async (barId: string): Promise<DrinkOption[]> => {
+  const { data, error } = await supabase
+    .from('drink_options')
+    .select('id, name, price, type')
+    .eq('bar_id', barId)
+    .order('name');
+  if (error) throw new Error(error.message);
+  const parsed = DrinkOptionsSchema.safeParse(data);
+  if (!parsed.success) throw new Error('Invalid drink data received');
+  return parsed.data;
+};
+
+const MAX_QUANTITY = 10;
+
+const DrinkSelection: React.FC<DrinkSelectionProps> = ({ barId, selectedDrinks, onDrinksChange }) => {
+  const [activeCategory, setActiveCategory] = useState<string>('all');
+
+  const {
+    data,
+    isLoading,
+    isError,
+    error,
+    refetch,
+  } = useQuery<DrinkOption[], Error>({
+    queryKey: ['drink-options', barId],
+    queryFn: async () => {
+      if (!barId) throw new Error('No barId provided');
+      return fetchDrinkOptions(barId);
+    },
+    enabled: !!barId,
+    staleTime: 1000 * 60 * 5,
+    retry: 1,
+  });
 
   useEffect(() => {
-    const fetchDrinkOptions = async () => {
-      if (!barId) return;
-      setLoading(true);
-      try {
-        const { data, error } = await supabase
-          .from('drink_options')
-          .select('id, name, price, type')
-          .eq('bar_id', barId)
-          .order('name');
-        if (error) {
-          console.error('Error fetching drink options:', error);
-          setDrinkOptions([]);
-          return;
-        }
-        if (data) {
-          const fetchedDrinks = data.map(drink => ({
-            id: drink.id,
-            name: drink.name,
-            price: drink.price,
-            type: drink.type,
-          }));
-          setDrinkOptions(fetchedDrinks);
-        } else {
-          setDrinkOptions([]);
-        }
-      } catch (error) {
-        console.error('Unexpected error in fetchDrinkOptions:', error);
-        setDrinkOptions([]);
-      } finally {
-        setLoading(false);
-      }
-    };
-    if (!barId) {
-       console.log("Using Mock Drink Data (no barId provided)");
-       setLoading(true);
-       setTimeout(() => {
-        const mockDrinks: DrinkOption[] = [
-          { id: 'mock-1', name: 'Signature Cocktail', price: 12.99, type: 'cocktail' },
-          { id: 'mock-2', name: 'Local Craft Beer', price: 8.99, type: 'beer' },
-          { id: 'mock-3', name: 'House Red Wine', price: 10.99, type: 'wine' },
-          { id: 'mock-4', name: 'Classic Whiskey', price: 11.99, type: 'spirit' },
-          { id: 'mock-5', name: null, price: 15.99, type: 'wine' },
-        ];
-        setDrinkOptions(mockDrinks);
-        setLoading(false);
-       }, 500);
-    } else {
-      fetchDrinkOptions();
+    if (isError) {
+      Toast.show({ type: 'error', text1: 'Failed to load drinks', text2: error?.message || 'Unknown error' });
     }
-  }, [barId]);
+  }, [isError, error]);
 
-  const drinkTypes = ['all', ...new Set(drinkOptions.map(drink => drink.type).filter(Boolean))];
+  const drinkOptions: DrinkOption[] = useMemo(() => Array.isArray(data) ? data : [], [data]);
 
-  const filteredDrinks = activeCategory === 'all'
-    ? drinkOptions
-    : drinkOptions.filter(drink => drink.type === activeCategory);
+  // Memoize drink types and filtered drinks
+  const drinkTypes: string[] = useMemo(() => {
+    const types = Array.from(new Set(drinkOptions.map((drink) => drink.type).filter((type): type is string => Boolean(type))));
+    return types.length > 1 ? ['all', ...types] : types;
+  }, [drinkOptions]);
+
+  const filteredDrinks = useMemo(() => {
+    const drinks = activeCategory === 'all'
+      ? drinkOptions
+      : drinkOptions.filter((drink) => drink.type === activeCategory);
+    // Sort by name (nulls last)
+    return drinks.slice().sort((a, b) => {
+      if (!a.name) return 1;
+      if (!b.name) return -1;
+      return a.name.localeCompare(b.name);
+    });
+  }, [drinkOptions, activeCategory]);
 
   const addDrink = (drink: DrinkOption) => {
-    const existingDrinkIndex = selectedDrinks.findIndex(item => item.drinkOption.id === drink.id);
+    const existingDrinkIndex = selectedDrinks.findIndex((item) => item.drinkOption.id === drink.id);
     if (existingDrinkIndex >= 0) {
       const updatedDrinks = [...selectedDrinks];
-      updatedDrinks[existingDrinkIndex].quantity += 1;
-      onDrinksChange(updatedDrinks);
+      if (updatedDrinks[existingDrinkIndex].quantity < MAX_QUANTITY) {
+        updatedDrinks[existingDrinkIndex].quantity += 1;
+        onDrinksChange(updatedDrinks);
+      }
     } else {
       onDrinksChange([...selectedDrinks, { drinkOption: drink, quantity: 1 }]);
     }
   };
 
-  const removeDrink = (drinkId: string) => {
-    const existingDrinkIndex = selectedDrinks.findIndex(item => item.drinkOption.id === drinkId);
+  const removeDrink = (drink: DrinkOption) => {
+    const existingDrinkIndex = selectedDrinks.findIndex((item) => item.drinkOption.id === drink.id);
     if (existingDrinkIndex >= 0) {
       const updatedDrinks = [...selectedDrinks];
       if (updatedDrinks[existingDrinkIndex].quantity > 1) {
         updatedDrinks[existingDrinkIndex].quantity -= 1;
+        onDrinksChange(updatedDrinks);
       } else {
         updatedDrinks.splice(existingDrinkIndex, 1);
+        onDrinksChange(updatedDrinks);
       }
-      onDrinksChange(updatedDrinks);
     }
   };
 
-  const getDrinkQuantity = (drinkId: string): number => {
-    const drink = selectedDrinks.find(item => item.drinkOption.id === drinkId);
-    return drink ? drink.quantity : 0;
-  };
+  // UI States
+  if (!barId) {
+    return (
+      <View className="items-center justify-center py-12">
+        <Text className="text-gray-400">No bar selected. Cannot fetch drinks.</Text>
+      </View>
+    );
+  }
 
-  const totalPrice = selectedDrinks.reduce(
-    (sum, item) => sum + (item.drinkOption.price * item.quantity), 0
-  );
+  if (isLoading) {
+    return (
+      <View className="items-center justify-center py-12">
+        <ActivityIndicator size="large" color="#f0165e" />
+        <Text className="text-gray-400 mt-2">Loading drinks...</Text>
+      </View>
+    );
+  }
+
+  if (isError) {
+    return (
+      <View className="items-center justify-center py-12">
+        <Text className="text-red-400 mb-2">Failed to load drinks.</Text>
+        <Pressable onPress={() => refetch()} className="px-4 py-2 bg-[#f0165e] rounded-lg mt-2">
+          <Text className="text-white font-semibold">Retry</Text>
+        </Pressable>
+      </View>
+    );
+  }
+
+  if (!drinkOptions.length) {
+    return (
+      <View className="items-center justify-center py-12">
+        <Text className="text-gray-400">No drinks available for this bar.</Text>
+      </View>
+    );
+  }
 
   return (
-    <View className="mb-6">
-      <Text className="text-lg font-semibold text-white mb-2">Pre-order Drinks (Optional)</Text>
-      <Text className="text-gray-400 mb-4">
-        Skip the wait by pre-ordering drinks for your reservation
-      </Text>
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        className="mb-4"
-        contentContainerStyle={{ paddingHorizontal: 4 }}
-      >
-        {drinkTypes.map((type) => (
-          <Pressable
-            key={type}
-            className={`mx-1 px-4 py-2 rounded-full ${
-              activeCategory === type ? 'bg-[#ff4d6d]' : 'bg-[#1f1f27]'
-            }`}
-            onPress={() => setActiveCategory(type)}
-          >
-            <Text className={`capitalize ${
-              activeCategory === type ? 'text-white font-medium' : 'text-gray-300'
-            }`}>
-              {type}
-            </Text>
-          </Pressable>
-        ))}
-      </ScrollView>
-      {loading ? (
-        <View className="items-center py-6">
-          <ActivityIndicator size="large" color="#ff4d6d" />
-          <Text className="text-gray-400 mt-2">Loading drink options...</Text>
-        </View>
-      ) : drinkOptions.length === 0 && barId ? (
-         <View className="items-center py-6 bg-[#1f1f27] rounded-xl">
-            <Wine size={32} color="#9ca3af" />
-            <Text className="text-gray-400 mt-2">No drinks available for this bar yet.</Text>
-         </View>
-      ) : (
-        <View>
-          {filteredDrinks.map((drink) => {
-            const quantity = getDrinkQuantity(drink.id);
-            return (
-              <View
-                key={drink.id}
-                className="bg-[#1f1f27] p-4 rounded-xl mb-3 flex-row items-center"
-              >
-                <View className="w-16 h-16 bg-[#2a2a35] rounded-lg mr-3 items-center justify-center flex-shrink-0">
-                  <Wine size={24} color="#9ca3af" />
-                </View>
-                <View className="flex-1 mr-2">
-                  <Text className="text-white font-medium" numberOfLines={2}>
-                    {drink.name || `Unnamed ${drink.type || 'Drink'}`}
-                   </Text>
-                  <Text className="text-[#ff4d6d] mt-1 font-semibold">
-                    ${drink.price?.toFixed(2) ?? 'N/A'}
-                  </Text>
-                </View>
-                <View className="flex-col items-center w-20">
-                  {quantity > 0 ? (
-                    <View className="flex-row items-center justify-center">
-                      <Pressable
-                        className="p-2 rounded-full bg-[#2a2a35]"
-                        onPress={() => removeDrink(drink.id)} hitSlop={10}
-                      >
-                        <Minus size={18} color="#fff" />
-                      </Pressable>
-                      <Text className="text-white mx-3 font-medium text-lg">{quantity}</Text>
-                      <Pressable
-                        className="p-2 rounded-full bg-[#2a2a35]"
-                        onPress={() => addDrink(drink)} hitSlop={10}
-                      >
-                        <Plus size={18} color="#fff" />
-                      </Pressable>
-                    </View>
-                  ) : (
-                    <Pressable
-                      className="px-4 py-2 bg-[#ff4d6d] rounded-lg"
-                      onPress={() => addDrink(drink)}
-                    >
-                      <Text className="text-white font-medium">Add</Text>
-                    </Pressable>
-                  )}
-                </View>
-              </View>
-            );
-          })}
-        </View>
-      )}
-      {selectedDrinks.length > 0 && !loading && (
-        <View className="bg-[#ff4d6d]/10 p-4 rounded-xl mt-4 border border-[#ff4d6d]/20">
-          <Text className="text-white text-base font-semibold mb-3">Order Summary</Text>
-          {selectedDrinks.map((item) => (
-            <View key={item.drinkOption.id} className="flex-row justify-between items-center mb-2">
-              <View className="flex-1 mr-2">
-                <Text className="text-gray-300" numberOfLines={1}>
-                  {item.quantity}x {item.drinkOption.name || `Unnamed ${item.drinkOption.type || 'Drink'}`}
-                </Text>
-              </View>
-              <Text className="text-white w-16 text-right">
-                ${(item.drinkOption.price * item.quantity).toFixed(2)}
-              </Text>
-            </View>
+    <View>
+      {/* Category Tabs (only if >1 type) */}
+      {drinkTypes.length > 1 && (
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} className="mb-4">
+          {drinkTypes.map((category) => (
+            <Pressable
+              key={category}
+              className={`px-4 py-2 mr-2 rounded-full ${activeCategory === category ? 'bg-[#f0165e]' : 'bg-[#23232b]'}`}
+              onPress={() => setActiveCategory(category)}
+              accessibilityRole="button"
+              accessibilityState={{ selected: activeCategory === category }}
+              accessibilityLabel={`Filter drinks by ${DRINK_TYPE_LABELS[category] || category}`}
+            >
+              <Text className={`font-semibold ${activeCategory === category ? 'text-white' : 'text-gray-300'}`}>{DRINK_TYPE_LABELS[category] || category}</Text>
+            </Pressable>
           ))}
-          <View className="flex-row justify-between items-center mt-3 pt-3 border-t border-[#ff4d6d]/30">
-            <Text className="text-white text-lg font-bold">Total</Text>
-            <Text className="text-white text-lg font-bold">${totalPrice.toFixed(2)}</Text>
-          </View>
-        </View>
+        </ScrollView>
       )}
+
+      {/* Drink List */}
+      <ScrollView style={{ maxHeight: 320 }}>
+        {filteredDrinks.map((drink) => {
+          const selected = selectedDrinks.find((item) => item.drinkOption.id === drink.id);
+          const isSelected = !!selected && selected.quantity > 0;
+          return (
+            <View
+              key={drink.id}
+              className={`flex-row items-center justify-between rounded-xl px-4 py-3 mb-3 ${isSelected ? 'bg-[#2a2a35]' : 'bg-[#18181b]'}`}
+              accessibilityLabel={`${drink.name || 'Unnamed Drink'}, ${DRINK_TYPE_LABELS[drink.type] || drink.type}, €${drink.price.toFixed(2)}, selected: ${selected?.quantity || 0}`}
+            >
+              <View className="flex-1">
+                <Text className="text-white font-semibold text-base">{drink.name || 'Unnamed Drink'}</Text>
+                <Text className="text-gray-400 text-xs mt-0.5">{DRINK_TYPE_LABELS[drink.type] || drink.type}</Text>
+              </View>
+              <Text className="text-pink-400 font-semibold mr-4">€{drink.price.toFixed(2)}</Text>
+              <View className="flex-row items-center">
+                <Pressable
+                  onPress={() => removeDrink(drink)}
+                  className="p-2"
+                  accessibilityLabel="Remove one"
+                  accessibilityRole="button"
+                  accessibilityState={{ disabled: !selected || selected.quantity === 0 }}
+                  disabled={!selected || selected.quantity === 0}
+                >
+                  <Minus size={20} color={selected && selected.quantity > 0 ? '#f0165e' : '#555'} />
+                </Pressable>
+                <Text className="mx-2 text-white min-w-[16px] text-center">{selected?.quantity || 0}</Text>
+                <Pressable
+                  onPress={() => addDrink(drink)}
+                  className="p-2"
+                  accessibilityLabel="Add one"
+                  accessibilityRole="button"
+                  accessibilityState={{ disabled: selected?.quantity === MAX_QUANTITY }}
+                  disabled={selected?.quantity === MAX_QUANTITY}
+                >
+                  <Plus size={20} color={selected?.quantity === MAX_QUANTITY ? '#555' : '#f0165e'} />
+                </Pressable>
+              </View>
+            </View>
+          );
+        })}
+      </ScrollView>
     </View>
   );
 };

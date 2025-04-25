@@ -351,12 +351,12 @@ const SeatOptionForm = React.memo(({
                        </View>
                    </View>
                </View>
-               <Text className="text-xs text-gray-400 mt-1">Leave both blank or set to 0 to allow any group size. If Min is set (>0), Max is required and must be ≥ Min.</Text>
+               <Text className="text-xs text-gray-400 mt-1">Leave both blank or set to 0 to allow any group size. If Min is set ({'>'}0), Max is required and must be {'≥'} Min.</Text>
                {isMaxPeopleInvalid && !isDisabled && (
                    <View className="flex-row items-center mt-1">
                        <AlertCircle size={12} color="#f87171" />
                        <Text className="text-red-400 text-xs ml-1 w-full">
-                           Max People is required if Min is set (>0) & must be ≥ Min People.
+                           Max People is required if Min is set ({'>'}0) & must be {'≥'} Min People.
                        </Text>
                    </View>
                )}
@@ -844,8 +844,6 @@ export default function Seats() {
                   newOpen.delete(type);
                   return newOpen;
               });
-              // Optional: Reset form values when unconfiguring? Decide based on desired UX.
-              // Currently, form values persist until save/revert.
           }
           return newConfigured;
       });

@@ -9,6 +9,11 @@ export type SeatDetails = {
   remainingCount: number;
   minPeople: number;
   maxPeople: number;
+  restrictions?: {
+    min_bottles?: number;
+    min_consumption?: number;
+    [key: string]: unknown;
+  };
 };
 
 // Define the possible seat type values
@@ -112,6 +117,19 @@ const SeatTypeSelection: React.FC<SeatTypeSelectionProps> = ({
             statusColor = 'text-gray-500';
           }
 
+          // --- Compose requirements string if restrictions exist ---
+          let requirementsText = '';
+          if (detail?.restrictions) {
+            const { min_bottles, min_consumption } = detail.restrictions;
+            if (typeof min_bottles === 'number' && min_bottles > 0) {
+              requirementsText += `Min. ${min_bottles} bottle${min_bottles > 1 ? 's' : ''}`;
+            }
+            if (typeof min_consumption === 'number' && min_consumption > 0) {
+              if (requirementsText) requirementsText += ' · ';
+              requirementsText += `Min. spend €${min_consumption}`;
+            }
+          }
+
           return (
             <Pressable
               key={baseOption.type}
@@ -154,6 +172,12 @@ const SeatTypeSelection: React.FC<SeatTypeSelectionProps> = ({
                                 <Text className="text-xs text-gray-400">{minPeople}-{maxPeople}</Text>
                             </View>
                          )}
+                         {/* Show requirements if present */}
+                         {requirementsText ? (
+                           <View className="flex-row items-center mr-3">
+                             <Text className="text-xs text-red-400 font-semibold">{requirementsText}</Text>
+                           </View>
+                         ) : null}
                     </View>
                  </View>
               </View>
