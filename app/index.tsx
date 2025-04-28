@@ -20,7 +20,7 @@ const Index = (): JSX.Element => {
       user &&
       profile
     ) {
-      if (profile.role === 'customer') router.replace('/(main)/home');
+      if (profile.role === 'customer') router.replace('/(main)/(tabs)');
       else if (profile.role === 'owner' || profile.role === 'staff') router.replace('/(admin)/admin-panel');
     }
   }, [navigationState?.key, isLoading, user, profile, router]);

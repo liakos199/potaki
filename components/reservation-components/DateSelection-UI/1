@@ -1,0 +1,747 @@
+"use client"
+
+import React, { useMemo, useCallback, useRef, useEffect } from "react"
+import { View, Text, Pressable, ScrollView, ActivityIndicator, Animated, StyleSheet, Easing } from "react-native"
+import { Calendar, Clock, CheckCircle, XCircle, AlertTriangle, Flame } from "lucide-react-native"
+import { useQuery } from "@tanstack/react-query"
+import { format, addDays, isSameDay, startOfDay, addMonths, isAfter, isBefore, parse } from "date-fns"
+
+// --- Type Definitions ---
+type SeatOptionType = "bar" | "table" | "vip"
+type DateStatus = {
+  isOpen: boolean
+  isException: boolean
+  openTime: string | null
+  closeTime: string | null
+  isFullyBooked: boolean
+  availableSeatTypes: SeatOptionType[]
+  remainingCount?: number
+}
+
+type DateSelectionProps = {
+  barId: string
+  selectedDate: Date | null
+  onDateChange: (date: Date) => void
+}
+
+// --- Helper Functions ---
+const formatTimeDisplay = (timeString: string | null): string | null => {
+  if (!timeString) return null
+  try {
+    const dummyDate = parse(timeString, "HH:mm:ss", new Date())
+    return format(dummyDate, "h:mm a")
+  } catch (e) {
+    console.error("Error formatting time:", timeString, e)
+    return timeString.substring(0, 5) // Fallback
+  }
+}
+
+const capitalize = (s: string) => (s ? s.charAt(0).toUpperCase() + s.slice(1) : "")
+
+// --- Mock Data Function ---
+const fetchBarAvailability = async ({
+  queryKey,
+}: {
+  queryKey: readonly unknown[]
+}): Promise<Record<string, DateStatus>> => {
+  // Mock data for demonstration
+  const today = startOfDay(new Date())
+  const mockData: Record<string, DateStatus> = {}
+
+  for (let i = 0; i < 30; i++) {
+    const date = addDays(today, i)
+    const dateStr = format(date, "yyyy-MM-dd")
+
+    // Create different types of days for demonstration
+    if (i % 7 === 0) {
+      // Closed day
+      mockData[dateStr] = {
+        isOpen: false,
+        isException: false,
+        openTime: null,
+        closeTime: null,
+        isFullyBooked: false,
+        availableSeatTypes: [],
+      }
+    } else if (i % 7 === 1) {
+      // Exception day
+      mockData[dateStr] = {
+        isOpen: true,
+        isException: true,
+        openTime: "19:00:00",
+        closeTime: "03:00:00",
+        isFullyBooked: false,
+        availableSeatTypes: ["bar", "table"],
+        remainingCount: 15,
+      }
+    } else if (i % 7 === 2) {
+      // Fully booked day
+      mockData[dateStr] = {
+        isOpen: true,
+        isException: false,
+        openTime: "18:00:00",
+        closeTime: "02:00:00",
+        isFullyBooked: true,
+        availableSeatTypes: [],
+      }
+    } else if (i % 7 === 3) {
+      // Limited availability day
+      mockData[dateStr] = {
+        isOpen: true,
+        isException: false,
+        openTime: "18:00:00",
+        closeTime: "02:00:00",
+        isFullyBooked: false,
+        availableSeatTypes: ["bar"],
+        remainingCount: 5,
+      }
+    } else {
+      // Normal open day
+      mockData[dateStr] = {
+        isOpen: true,
+        isException: false,
+        openTime: "18:00:00",
+        closeTime: "02:00:00",
+        isFullyBooked: false,
+        availableSeatTypes: ["bar", "table", "vip"],
+        remainingCount: 25,
+      }
+    }
+  }
+
+  return mockData
+}
+
+// --- Main Component ---
+const DateSelection: React.FC<DateSelectionProps> = ({ barId, selectedDate, onDateChange }) => {
+  // --- Animation References ---
+  const flameAnimatedValue = useRef(new Animated.Value(0)).current
+  const exceptionAnimatedValue = useRef(new Animated.Value(0)).current
+
+  // --- Date Range Calculation ---
+  const today = useMemo(() => startOfDay(new Date()), [])
+  const maxDate = useMemo(() => addMonths(today, 1), [today])
+  const startDateString = useMemo(() => format(today, "yyyy-MM-dd"), [today])
+  const endDateString = useMemo(() => format(maxDate, "yyyy-MM-dd"), [maxDate])
+
+  // --- TanStack Query Hook ---
+  const {
+    data: dateStatusData,
+    isLoading,
+    isError,
+    error: queryError,
+  } = useQuery<Record<string, DateStatus>, Error>({
+    queryKey: ["barAvailability", barId, startDateString, endDateString],
+    queryFn: fetchBarAvailability,
+    enabled: !!barId,
+  })
+
+  // Provide a default empty object for dateStatusData while loading or if undefined
+  const dateStatusState = dateStatusData ?? {}
+
+  // Format the error message for display
+  const errorMessage = useMemo(() => {
+    if (!isError || !queryError) return null
+    return `Could not load available dates: ${queryError.message || "Unknown error"}`
+  }, [isError, queryError])
+
+  // --- Generate Dates for Display ---
+  const datesForDisplay = useMemo(() => {
+    const dates: Date[] = []
+    let currentDate = today
+    while (!isAfter(currentDate, maxDate)) {
+      dates.push(currentDate)
+      currentDate = addDays(currentDate, 1)
+    }
+    return dates
+  }, [today, maxDate])
+
+  // --- Event Handlers ---
+  const handleDateSelect = useCallback(
+    (date: Date) => {
+      onDateChange(startOfDay(date))
+    },
+    [onDateChange],
+  )
+
+  // --- Format date for display ---
+  const formatDateDisplay = useCallback((date: Date) => {
+    const todayLocal = startOfDay(new Date())
+    const tomorrowLocal = addDays(todayLocal, 1)
+    if (isSameDay(date, todayLocal)) return "Today"
+    if (isSameDay(date, tomorrowLocal)) return "Tomorrow"
+    return format(date, "EEE, MMM d")
+  }, [])
+
+  // --- Get Status info for the selected date ---
+  const selectedDateString = selectedDate ? format(selectedDate, "yyyy-MM-dd") : null
+  const selectedStatusInfo = selectedDateString ? dateStatusState[selectedDateString] : null
+  const selectedOpenTimeFormatted = selectedStatusInfo ? formatTimeDisplay(selectedStatusInfo.openTime) : null
+  const selectedCloseTimeFormatted = selectedStatusInfo ? formatTimeDisplay(selectedStatusInfo.closeTime) : null
+
+  // --- Animations ---
+  useEffect(() => {
+    // Flame animation
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(flameAnimatedValue, {
+          toValue: 1,
+          duration: 1000,
+          easing: Easing.inOut(Easing.ease),
+          useNativeDriver: true,
+        }),
+        Animated.timing(flameAnimatedValue, {
+          toValue: 0,
+          duration: 1000,
+          easing: Easing.inOut(Easing.ease),
+          useNativeDriver: true,
+        }),
+      ]),
+    ).start()
+
+    // Exception animation
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(exceptionAnimatedValue, {
+          toValue: 1,
+          duration: 1500,
+          easing: Easing.inOut(Easing.ease),
+          useNativeDriver: true,
+        }),
+        Animated.timing(exceptionAnimatedValue, {
+          toValue: 0,
+          duration: 1500,
+          easing: Easing.inOut(Easing.ease),
+          useNativeDriver: true,
+        }),
+      ]),
+    ).start()
+
+    return () => {
+      flameAnimatedValue.stopAnimation()
+      exceptionAnimatedValue.stopAnimation()
+    }
+  }, [flameAnimatedValue, exceptionAnimatedValue])
+
+  // Animation interpolations
+  const flameOpacity = flameAnimatedValue.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0.6, 1],
+  })
+
+  const exceptionOpacity = exceptionAnimatedValue.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0.6, 1],
+  })
+
+  // --- Render ---
+  return (
+    <View style={styles.container}>
+      <Text style={styles.title}>Select a Date</Text>
+
+      {/* --- Loading State --- */}
+      {isLoading && (
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color="#ff4d6d" />
+          <Text style={styles.loadingText}>Loading available dates...</Text>
+        </View>
+      )}
+
+      {/* --- Error State --- */}
+      {isError && !isLoading && (
+        <View style={styles.errorContainer}>
+          <Text style={styles.errorText}>{errorMessage}</Text>
+        </View>
+      )}
+
+      {/* --- No Dates Available Message --- */}
+      {!isLoading && !isError && Object.keys(dateStatusState).length === 0 && (
+        <Text style={styles.noDataText}>No available dates found for this bar in the next month.</Text>
+      )}
+
+      {/* --- Date Selection Timeline --- */}
+      {!isLoading && !isError && Object.keys(dateStatusState).length > 0 && (
+        <View style={styles.dateSelectionWrapper}>
+          {/* Timeline Header */}
+          <View style={styles.timelineHeader}>
+            <View style={styles.timelineLine} />
+            <Text style={styles.timelineHeaderText}>Available Dates</Text>
+            <View style={styles.timelineLine} />
+          </View>
+
+          {/* Timeline Dates */}
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            style={styles.timelineScroll}
+            contentContainerStyle={styles.timelineContent}
+          >
+            {datesForDisplay.map((date) => {
+              const dateString = format(date, "yyyy-MM-dd")
+              const statusInfo = dateStatusState[dateString]
+
+              // Only disable closed days or past days
+              const isDisabled = !statusInfo || !statusInfo.isOpen || isBefore(date, today)
+              const isSelected = selectedDate && isSameDay(selectedDate, date)
+              const isException = statusInfo?.isException ?? false
+              const isFullyBooked = statusInfo?.isFullyBooked && statusInfo?.isOpen
+              const hasLimitedAvailability =
+                statusInfo?.remainingCount !== undefined &&
+                statusInfo.remainingCount < 10 &&
+                !statusInfo.isFullyBooked &&
+                statusInfo.isOpen
+
+              return (
+                <Pressable
+                  key={date.toISOString()}
+                  disabled={isDisabled}
+                  style={[
+                    styles.timelineItem,
+                    isSelected && styles.timelineItemSelected,
+                    isDisabled && styles.timelineItemDisabled,
+                  ]}
+                  onPress={() => handleDateSelect(date)}
+                >
+                  {/* Date Circle */}
+                  <View
+                    style={[
+                      styles.dateCircle,
+                      isSelected && styles.dateCircleSelected,
+                      isDisabled && styles.dateCircleDisabled,
+                      isFullyBooked && styles.dateCircleFullyBooked,
+                      isException && styles.dateCircleException,
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        styles.dateNumber,
+                        isSelected && styles.dateNumberSelected,
+                        isDisabled && styles.dateNumberDisabled,
+                      ]}
+                    >
+                      {format(date, "d")}
+                    </Text>
+
+                    {/* Status indicators */}
+                    {isException && !isDisabled && (
+                      <Animated.View style={[styles.exceptionDot, { opacity: exceptionOpacity }]} />
+                    )}
+
+                    {isFullyBooked && !isDisabled && <View style={styles.fullyBookedDot} />}
+
+                    {hasLimitedAvailability && (
+                      <Animated.View style={[styles.limitedDot, { opacity: flameOpacity }]} />
+                    )}
+                  </View>
+
+                  {/* Day name */}
+                  <Text
+                    style={[
+                      styles.dayName,
+                      isSelected && styles.dayNameSelected,
+                      isDisabled && styles.dayNameDisabled,
+                    ]}
+                  >
+                    {format(date, "EEE")}
+                  </Text>
+
+                  {/* Month */}
+                  <Text
+                    style={[
+                      styles.monthName,
+                      isSelected && styles.monthNameSelected,
+                      isDisabled && styles.monthNameDisabled,
+                    ]}
+                  >
+                    {format(date, "MMM")}
+                  </Text>
+                </Pressable>
+              )
+            })}
+          </ScrollView>
+
+          {/* Legend */}
+          <View style={styles.legendContainer}>
+            <View style={styles.legendItem}>
+              <View style={[styles.legendDot, { backgroundColor: "#63e6be" }]} />
+              <Text style={styles.legendText}>Open</Text>
+            </View>
+            <View style={styles.legendItem}>
+              <View style={[styles.legendDot, { backgroundColor: "#ff4d6d" }]} />
+              <Text style={styles.legendText}>Full</Text>
+            </View>
+            <View style={styles.legendItem}>
+              <View style={[styles.legendDot, { backgroundColor: "#FFB800" }]} />
+              <Text style={styles.legendText}>Exception</Text>
+            </View>
+            <View style={styles.legendItem}>
+              <View style={[styles.legendDot, { backgroundColor: "#ff9500" }]} />
+              <Text style={styles.legendText}>Limited</Text>
+            </View>
+          </View>
+        </View>
+      )}
+
+      {/* --- Selected Date Details --- */}
+      {selectedDate && selectedStatusInfo && (
+        <View style={styles.detailsContainer}>
+          {/* Header with date and status */}
+          <View style={styles.detailsHeader}>
+            <View style={styles.dateIconWrapper}>
+              <Calendar size={20} color="#FFFFFF" />
+            </View>
+            <View style={styles.dateInfoWrapper}>
+              <Text style={styles.selectedDateText}>{formatDateDisplay(selectedDate)}</Text>
+              {selectedStatusInfo.isException && (
+                <Text style={styles.exceptionText}>Special Hours</Text>
+              )}
+            </View>
+            
+            {/* Status badge */}
+            <View
+              style={[
+                styles.statusBadge,
+                !selectedStatusInfo.isOpen
+                  ? styles.closedBadge
+                  : selectedStatusInfo.isFullyBooked
+                  ? styles.fullyBookedBadge
+                  : styles.openBadge,
+              ]}
+            >
+              <Text style={styles.statusText}>
+                {!selectedStatusInfo.isOpen
+                  ? "Closed"
+                  : selectedStatusInfo.isFullyBooked
+                  ? "Full"
+                  : "Open"}
+              </Text>
+            </View>
+          </View>
+
+          {/* Divider */}
+          <View style={styles.divider} />
+
+          {/* Hours - only show if open */}
+          {selectedStatusInfo.isOpen && (
+            <View style={styles.infoRow}>
+              <Clock size={16} color="#a0a0a0" />
+              <Text style={styles.infoText}>
+                {selectedOpenTimeFormatted && selectedCloseTimeFormatted
+                  ? `${selectedOpenTimeFormatted} - ${selectedCloseTimeFormatted}`
+                  : "(Hours not specified)"}
+              </Text>
+            </View>
+          )}
+
+          {/* Availability - only show if open and not fully booked */}
+          {selectedStatusInfo.isOpen && !selectedStatusInfo.isFullyBooked && (
+            <>
+              <View style={styles.infoRow}>
+                <CheckCircle size={16} color="#63e6be" />
+                <Text style={styles.infoText}>
+                  Available seating: {selectedStatusInfo.availableSeatTypes.map(capitalize).join(", ")}
+                </Text>
+              </View>
+
+              {/* Remaining count */}
+              {selectedStatusInfo.remainingCount !== undefined && (
+                <View style={styles.infoRow}>
+                  {selectedStatusInfo.remainingCount < 10 ? (
+                    <Animated.View style={{ opacity: flameOpacity }}>
+                      <Flame size={16} color="#ff9500" />
+                    </Animated.View>
+                  ) : (
+                    <CheckCircle size={16} color="#63e6be" />
+                  )}
+                  <Text
+                    style={[
+                      styles.infoText,
+                      selectedStatusInfo.remainingCount < 10 && { color: "#ff9500" },
+                    ]}
+                  >
+                    {selectedStatusInfo.remainingCount} {selectedStatusInfo.remainingCount === 1 ? "spot" : "spots"}{" "}
+                    remaining
+                  </Text>
+                </View>
+              )}
+            </>
+          )}
+
+          {/* Fully booked message */}
+          {selectedStatusInfo.isOpen && selectedStatusInfo.isFullyBooked && (
+            <View style={styles.fullyBookedContainer}>
+              <XCircle size={20} color="#ff4d6d" />
+              <Text style={styles.fullyBookedText}>No availability for this date</Text>
+            </View>
+          )}
+        </View>
+      )}
+    </View>
+  )
+}
+
+// --- Styles ---
+const styles = StyleSheet.create({
+  container: {
+    backgroundColor: "#121218",
+    borderRadius: 16,
+    padding: 20,
+    marginBottom: 24,
+  },
+  title: {
+    fontSize: 22,
+    fontWeight: "700",
+    color: "white",
+    marginBottom: 20,
+    textAlign: "center",
+  },
+  loadingContainer: {
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 40,
+  },
+  loadingText: {
+    color: "#a0a0a0",
+    marginTop: 12,
+  },
+  errorContainer: {
+    backgroundColor: "rgba(220, 38, 38, 0.2)",
+    padding: 16,
+    borderRadius: 12,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: "rgba(220, 38, 38, 0.4)",
+  },
+  errorText: {
+    color: "#fca5a5",
+    textAlign: "center",
+  },
+  noDataText: {
+    color: "#a0a0a0",
+    textAlign: "center",
+    fontStyle: "italic",
+    marginVertical: 16,
+  },
+  dateSelectionWrapper: {
+    marginBottom: 20,
+  },
+  timelineHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 16,
+  },
+  timelineLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: "#2a2a36",
+  },
+  timelineHeaderText: {
+    color: "#a0a0a0",
+    fontSize: 12,
+    marginHorizontal: 10,
+    textTransform: "uppercase",
+    letterSpacing: 1,
+  },
+  timelineScroll: {
+    marginBottom: 16,
+  },
+  timelineContent: {
+    paddingHorizontal: 10,
+  },
+  timelineItem: {
+    alignItems: "center",
+    marginHorizontal: 8,
+    width: 60,
+  },
+  timelineItemSelected: {},
+  timelineItemDisabled: {
+    opacity: 0.5,
+  },
+  dateCircle: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    backgroundColor: "#1f1f27",
+    justifyContent: "center",
+    alignItems: "center",
+    marginBottom: 8,
+    position: "relative",
+    borderWidth: 2,
+    borderColor: "transparent",
+  },
+  dateCircleSelected: {
+    backgroundColor: "#ff4d6d",
+    borderColor: "#ff4d6d",
+  },
+  dateCircleDisabled: {
+    backgroundColor: "#1f1f27",
+    borderColor: "transparent",
+  },
+  dateCircleFullyBooked: {
+    borderColor: "#ff4d6d",
+  },
+  dateCircleException: {
+    borderColor: "#FFB800",
+  },
+  dateNumber: {
+    color: "white",
+    fontSize: 18,
+    fontWeight: "700",
+  },
+  dateNumberSelected: {
+    color: "white",
+  },
+  dateNumberDisabled: {
+    color: "#666666",
+  },
+  exceptionDot: {
+    position: "absolute",
+    top: -4,
+    right: -4,
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    backgroundColor: "#FFB800",
+  },
+  fullyBookedDot: {
+    position: "absolute",
+    bottom: -4,
+    right: -4,
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    backgroundColor: "#ff4d6d",
+  },
+  limitedDot: {
+    position: "absolute",
+    bottom: -4,
+    left: -4,
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    backgroundColor: "#ff9500",
+  },
+  dayName: {
+    color: "#a0a0a0",
+    fontSize: 14,
+    fontWeight: "500",
+  },
+  dayNameSelected: {
+    color: "#ff4d6d",
+  },
+  dayNameDisabled: {
+    color: "#666666",
+  },
+  monthName: {
+    color: "#a0a0a0",
+    fontSize: 12,
+  },
+  monthNameSelected: {
+    color: "#ff4d6d",
+  },
+  monthNameDisabled: {
+    color: "#666666",
+  },
+  legendContainer: {
+    flexDirection: "row",
+    justifyContent: "center",
+    flexWrap: "wrap",
+  },
+  legendItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginHorizontal: 8,
+    marginBottom: 4,
+  },
+  legendDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    marginRight: 4,
+  },
+  legendText: {
+    color: "#a0a0a0",
+    fontSize: 12,
+  },
+  detailsContainer: {
+    backgroundColor: "#1f1f27",
+    borderRadius: 16,
+    padding: 16,
+  },
+  detailsHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  dateIconWrapper: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: "#ff4d6d",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  dateInfoWrapper: {
+    flex: 1,
+    marginLeft: 12,
+  },
+  selectedDateText: {
+    color: "white",
+    fontSize: 16,
+    fontWeight: "600",
+  },
+  exceptionText: {
+    color: "#FFB800",
+    fontSize: 12,
+    marginTop: 2,
+  },
+  statusBadge: {
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  openBadge: {
+    backgroundColor: "#63e6be",
+  },
+  closedBadge: {
+    backgroundColor: "#666666",
+  },
+  fullyBookedBadge: {
+    backgroundColor: "#ff4d6d",
+  },
+  statusText: {
+    color: "#000000",
+    fontSize: 12,
+    fontWeight: "600",
+  },
+  divider: {
+    height: 1,
+    backgroundColor: "#2a2a36",
+    marginVertical: 16,
+  },
+  infoRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 12,
+  },
+  infoText: {
+    color: "#d1d1d1",
+    marginLeft: 8,
+    fontSize: 14,
+  },
+  fullyBookedContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(255, 77, 109, 0.1)",
+    padding: 16,
+    borderRadius: 8,
+  },
+  fullyBookedText: {
+    color: "#ff4d6d",
+    marginLeft: 8,
+    fontSize: 14,
+    fontWeight: "500",
+  },
+})
+
+export default DateSelection

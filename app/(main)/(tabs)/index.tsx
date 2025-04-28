@@ -2,7 +2,6 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { View, Text, FlatList, ActivityIndicator, Pressable, Image, TextInput, RefreshControl} from 'react-native';
 import { useRouter } from 'expo-router';
 import { supabase } from '@/src/lib/supabase';
-import { useAuthStore } from '@/src/features/auth/store/auth-store';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Search, MapPin, Calendar, X, ChevronRight, ImageIcon, Star, Filter, Heart, Map } from 'lucide-react-native';
 import { format } from 'date-fns';
@@ -37,9 +36,7 @@ const HomeScreen = (): JSX.Element => {
   const [refreshing, setRefreshing] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [activeCategory, setActiveCategory] = useState('all');
-  
   const router = useRouter();
-  const signOut = useAuthStore((s) => s.signOut);
 
   // Function to get image URL from Supabase Storage
   const getImageUrl = useCallback(async (barId: string): Promise<string | undefined> => {
@@ -173,12 +170,6 @@ const HomeScreen = (): JSX.Element => {
   const handleBarPress = useCallback((barId: string) => {
     router.push(`/bar/${barId}`);
   }, [router]);
-
-  // Handle logout
-  const handleLogout = async () => {
-    await signOut();
-    router.replace('/');
-  };
 
   // Toggle favorite status
   const toggleFavorite = useCallback((barId: string) => {
@@ -400,9 +391,6 @@ const HomeScreen = (): JSX.Element => {
           )}
         />
       )}
-      <Pressable onPress={handleLogout} className="mt-8 bg-[#f01669] px-4 py-2 rounded-xl items-center">
-        <Text>Logout</Text>
-      </Pressable>
     </SafeAreaView>
   );
 };

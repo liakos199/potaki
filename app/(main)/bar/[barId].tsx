@@ -1,9 +1,9 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
-import { View, Text, Image, ScrollView, ActivityIndicator, Pressable, Linking, FlatList, Dimensions, StyleSheet, Animated } from 'react-native';
+import { View, Text, Image, ActivityIndicator, Pressable, Linking, FlatList, Dimensions, Animated } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { supabase } from '@/src/lib/supabase';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { MapPin, Phone, Globe, Clock, ArrowLeft, Star, ChevronLeft, ChevronRight, ImageIcon, Calendar, Heart, Share2, MessageCircle } from 'lucide-react-native';
+import { MapPin, Phone, Globe, ArrowLeft, Star,ImageIcon, Calendar, Heart, Share2 } from 'lucide-react-native';
 import { format } from 'date-fns';
 import { StatusBar } from 'expo-status-bar';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -503,17 +503,21 @@ const BarDetailsScreen = (): JSX.Element => {
             )}
           </View>
           
-          {/* Make Reservation Button */}
-          <Pressable
-            className="mb-20 py-4 bg-[#f01669] rounded-xl items-center"
-            accessibilityRole="button"
-            accessibilityLabel="Make a reservation"
-            onPress={() => router.push(`/reservation/new?barId=${bar.id}`)}
-          >
-            <Text className="text-white text-lg font-semibold">Make a Reservation</Text>
-          </Pressable>
+
         </View>
       </Animated.ScrollView>
+      {/* Bottom Booking Bar */}
+      <View
+        className="absolute bottom-0 left-0 right-0 bg-[#1E1E1E] p-5 border-t border-t-[#2A2A2A]"
+      >
+        <Pressable
+          className="bg-[#E91E63] p-4 rounded-xl items-center"
+          onPress={() => router.push(`/reservation/new?barId=${bar.id}`)}
+        >
+          <Text className="text-white text-base font-inter-semibold">Book a Table</Text>
+        </Pressable>
+      </View>
+      
     </View>
   );
 };

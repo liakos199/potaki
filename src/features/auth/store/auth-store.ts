@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { User, Session } from '@supabase/supabase-js';
+import { User } from '@supabase/supabase-js';
 import { supabase } from '@/src/lib/supabase';
 import { UserProfile, UserProfileSchema } from '../schemas/user-profile-schema';
 

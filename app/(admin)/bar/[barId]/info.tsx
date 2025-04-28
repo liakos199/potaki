@@ -15,25 +15,22 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Controller, type FieldErrors, type Control } from "react-hook-form";
 import { useSharedValue, useAnimatedStyle, withTiming } from "react-native-reanimated";
 import { z } from "zod";
-import { supabase } from "@/src/lib/supabase"; // Adjust path if needed
-import { useAuthStore } from "@/src/features/auth/store/auth-store"; // Adjust path if needed
-import { useToast } from "@/src/components/general/Toast"; // Adjust path if needed
+import { supabase } from "@/src/lib/supabase"; 
+import { useAuthStore } from "@/src/features/auth/store/auth-store"; 
+import { useToast } from "@/src/components/general/Toast";
 import {
   AlertCircle,
   Edit2,
   AlertTriangle,
   Plus,
 } from "lucide-react-native";
-import type { Database } from "@/src/lib/database.types"; // Adjust path if needed
-
-// Assuming EditBarInfoModal and EditableField are correctly imported or defined elsewhere
-import EditBarInfoModal, { type EditableField } from "@/src/components/general/editModal"; // Adjust path if needed
-
+import type { Database } from "@/src/lib/database.types";
+import EditBarInfoModal, { type EditableField } from "@/src/components/general/editModal"; 
 // --- Type Definitions ---
 export type Bar = Database["public"]["Tables"]["bars"]["Row"];
 type BarUpdate = Database["public"]["Tables"]["bars"]["Update"];
 
-// --- Improved Form Schema (barFormSchema) ---
+// --- Form Schema (barFormSchema) ---
 export const barFormSchema = z.object({
   name: z
     .string({ required_error: "Name is required." })
